@@ -1,0 +1,23 @@
+# Build output
+bin/
+obj/
+publish/
+binBuildCheck*/
+
+# Working database (lives in C:\ProgramData on a deployed machine; never commit the live copy)
+data/
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# Throwaway dev/test fixtures and logs (~48 MB, not needed to run the app)
+test-data/
+test-data/*store*.json
+
+# Local tooling / IDE
+.vs/
+*.user
+.claude/
+
+# NOTE: seed/monthly-money-flow.db IS tracked on purpose — it is the bundled
+# initial dataset the deploy script restores on a fresh machine.

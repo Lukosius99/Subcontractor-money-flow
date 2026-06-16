@@ -1,0 +1,376 @@
+﻿{
+    "projectCodes":  [
+                         "P1545",
+                         "P1585",
+                         "P1619",
+                         "P1674",
+                         "P1700",
+                         "P1706",
+                         "P1707",
+                         "P1710",
+                         "P1720",
+                         "P1722",
+                         "P1730",
+                         "P1734",
+                         "P1736",
+                         "P1743",
+                         "P1756"
+                     ],
+    "projects":  [
+                     {
+                         "projectCode":  "P1545",
+                         "objectCount":  1,
+                         "amountWithoutVat":  22000,
+                         "contractedAmount":  0,
+                         "remaining":  -22000,
+                         "rowCount":  1,
+                         "subcontractorCount":  1,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1545-01",
+                                             "objectCode":  "01",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  22000,
+                                             "remaining":  -22000,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     },
+                     {
+                         "projectCode":  "P1585",
+                         "objectCount":  1,
+                         "amountWithoutVat":  170105.31,
+                         "contractedAmount":  0,
+                         "remaining":  -170105.31,
+                         "rowCount":  1,
+                         "subcontractorCount":  1,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1585-01",
+                                             "objectCode":  "01",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  170105.31,
+                                             "remaining":  -170105.31,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     },
+                     {
+                         "projectCode":  "P1619",
+                         "objectCount":  1,
+                         "amountWithoutVat":  627833.99,
+                         "contractedAmount":  0,
+                         "remaining":  -627833.99,
+                         "rowCount":  1,
+                         "subcontractorCount":  1,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1619-01",
+                                             "objectCode":  "01",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  627833.99,
+                                             "remaining":  -627833.99,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     },
+                     {
+                         "projectCode":  "P1674",
+                         "objectCount":  1,
+                         "amountWithoutVat":  535797.1,
+                         "contractedAmount":  0,
+                         "remaining":  -535797.1,
+                         "rowCount":  1,
+                         "subcontractorCount":  1,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1674-01",
+                                             "objectCode":  "01",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  535797.1,
+                                             "remaining":  -535797.1,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     },
+                     {
+                         "projectCode":  "P1700",
+                         "objectCount":  1,
+                         "amountWithoutVat":  77656.54,
+                         "contractedAmount":  0,
+                         "remaining":  -77656.54,
+                         "rowCount":  1,
+                         "subcontractorCount":  1,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1700-02",
+                                             "objectCode":  "02",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  77656.54,
+                                             "remaining":  -77656.54,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     },
+                     {
+                         "projectCode":  "P1706",
+                         "objectCount":  1,
+                         "amountWithoutVat":  197014.36,
+                         "contractedAmount":  0,
+                         "remaining":  -197014.36,
+                         "rowCount":  1,
+                         "subcontractorCount":  1,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1706-01",
+                                             "objectCode":  "01",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  197014.36,
+                                             "remaining":  -197014.36,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     },
+                     {
+                         "projectCode":  "P1707",
+                         "objectCount":  1,
+                         "amountWithoutVat":  600592.02,
+                         "contractedAmount":  0,
+                         "remaining":  -600592.02,
+                         "rowCount":  1,
+                         "subcontractorCount":  1,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1707-01",
+                                             "objectCode":  "01",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  600592.02,
+                                             "remaining":  -600592.02,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     },
+                     {
+                         "projectCode":  "P1710",
+                         "objectCount":  1,
+                         "amountWithoutVat":  17550.94,
+                         "contractedAmount":  0,
+                         "remaining":  -17550.94,
+                         "rowCount":  1,
+                         "subcontractorCount":  1,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1710-02",
+                                             "objectCode":  "02",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  17550.94,
+                                             "remaining":  -17550.94,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     },
+                     {
+                         "projectCode":  "P1720",
+                         "objectCount":  1,
+                         "amountWithoutVat":  115113.67,
+                         "contractedAmount":  0,
+                         "remaining":  -115113.67,
+                         "rowCount":  1,
+                         "subcontractorCount":  1,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1720-01",
+                                             "objectCode":  "01",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  115113.67,
+                                             "remaining":  -115113.67,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     },
+                     {
+                         "projectCode":  "P1722",
+                         "objectCount":  1,
+                         "amountWithoutVat":  300836.2,
+                         "contractedAmount":  0,
+                         "remaining":  -300836.2,
+                         "rowCount":  1,
+                         "subcontractorCount":  1,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1722-01",
+                                             "objectCode":  "01",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  300836.2,
+                                             "remaining":  -300836.2,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     },
+                     {
+                         "projectCode":  "P1730",
+                         "objectCount":  1,
+                         "amountWithoutVat":  13812,
+                         "contractedAmount":  0,
+                         "remaining":  -13812,
+                         "rowCount":  5,
+                         "subcontractorCount":  5,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1730-01",
+                                             "objectCode":  "01",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  13812,
+                                             "remaining":  -13812,
+                                             "subcontractorCount":  5,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     },
+                     {
+                         "projectCode":  "P1734",
+                         "objectCount":  1,
+                         "amountWithoutVat":  184872.5,
+                         "contractedAmount":  0,
+                         "remaining":  -184872.5,
+                         "rowCount":  1,
+                         "subcontractorCount":  1,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1734-01",
+                                             "objectCode":  "01",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  184872.5,
+                                             "remaining":  -184872.5,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     },
+                     {
+                         "projectCode":  "P1736",
+                         "objectCount":  1,
+                         "amountWithoutVat":  73200,
+                         "contractedAmount":  0,
+                         "remaining":  -73200,
+                         "rowCount":  1,
+                         "subcontractorCount":  1,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1736-02",
+                                             "objectCode":  "02",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  73200,
+                                             "remaining":  -73200,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     },
+                     {
+                         "projectCode":  "P1743",
+                         "objectCount":  2,
+                         "amountWithoutVat":  374450.00,
+                         "contractedAmount":  0,
+                         "remaining":  -374450.00,
+                         "rowCount":  2,
+                         "subcontractorCount":  2,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1743-01",
+                                             "objectCode":  "01",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  229013.62,
+                                             "remaining":  -229013.62,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         },
+                                         {
+                                             "objectNumber":  "P1743-02",
+                                             "objectCode":  "02",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  145436.38,
+                                             "remaining":  -145436.38,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     },
+                     {
+                         "projectCode":  "P1756",
+                         "objectCount":  1,
+                         "amountWithoutVat":  230000,
+                         "contractedAmount":  0,
+                         "remaining":  -230000,
+                         "rowCount":  1,
+                         "subcontractorCount":  1,
+                         "warningsCount":  0,
+                         "status":  "Missing contract",
+                         "objects":  [
+                                         {
+                                             "objectNumber":  "P1756-01",
+                                             "objectCode":  "01",
+                                             "contractedAmount":  0,
+                                             "amountWithoutVat":  230000,
+                                             "remaining":  -230000,
+                                             "subcontractorCount":  1,
+                                             "warningsCount":  0,
+                                             "status":  "Missing contract"
+                                         }
+                                     ]
+                     }
+                 ]
+}
