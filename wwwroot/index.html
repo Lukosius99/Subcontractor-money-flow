@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="lt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Projektai | Mėnesinis pinigų srautas</title>
+  <link rel="preload" href="/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/styles.css?v=20260616-ux1">
+  <script src="/app.js?v=20260616-ux1" defer></script>
+</head>
+<body>
+  <header class="app-bar">
+    <span class="app-bar-brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 17v-6"/><path d="M9 17V7"/><path d="M14 17v-4"/><path d="M19 17V9"/></svg>
+      </span>
+      Mėnesinis pinigų srautas
+    </span>
+    <nav class="app-bar-nav">
+      <a href="/" class="is-active">Projektai</a>
+    </nav>
+    <span class="app-bar-meta" id="latestImportMeta" hidden>
+      <span class="import-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+        <span id="latestImportText"></span>
+      </span>
+    </span>
+  </header>
+
+  <main class="shell">
+    <section class="page-header">
+      <div>
+        <h1>Projektai</h1>
+        <p class="page-subtitle" id="projectListSubtitle">Aktyvūs projektai iš naujausio sutarčių importo</p>
+      </div>
+    </section>
+
+    <div id="projectPageKpis" class="page-kpis" role="group" aria-label="Portfelio suvestinė" hidden></div>
+
+    <div id="statusStrip" class="status-strip" role="group" aria-label="Būsenų apžvalga" hidden></div>
+
+    <div class="view-tabs" aria-label="Projektų sąrašo rodinys">
+      <button id="activeProjectsTab" class="view-tab is-active" type="button" data-view="active">Aktyvūs projektai</button>
+      <button id="inactiveProjectsTab" class="view-tab" type="button" data-view="inactive">Neaktyvūs / nėra naujausiame sutarčių importe</button>
+    </div>
+
+    <div class="toolbar" id="filters">
+      <label class="toolbar-search" aria-label="Ieškoti projektų">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="projectSearch" type="search" autocomplete="off" placeholder="Ieškoti projekto, objekto, atsakingo, inžinieriaus&hellip;">
+        <button id="projectSearchClear" class="search-clear" type="button" aria-label="Išvalyti paiešką" hidden>&times;</button>
+      </label>
+      <label class="filter-control">
+        <span>Atsakingas</span>
+        <select id="responsibleFilter"></select>
+      </label>
+      <label class="filter-control">
+        <span>Inžinierius</span>
+        <select id="engineerFilter"></select>
+      </label>
+      <label class="filter-control">
+        <span>Būsena</span>
+        <select id="statusFilter">
+          <option value="">Visos būsenos</option>
+          <option value="Trūksta sutarties">Trūksta sutarties</option>
+          <option value="Viršyta riba">Viršyta riba</option>
+          <option value="Pagal planą">Pagal planą</option>
+        </select>
+      </label>
+      <label class="filter-check">
+        <input id="warningsFilter" type="checkbox">
+        <span>Tik su įspėjimais</span>
+      </label>
+      <span class="toolbar-count" id="projectCount">&mdash;</span>
+    </div>
+
+    <section aria-live="polite">
+      <div id="loading" class="skeleton" role="status" aria-label="Įkeliami projektai">
+        <div class="skeleton-head"><div class="skeleton-bar"></div></div>
+        <div class="skeleton-row"><div class="skeleton-bar" style="width:56px"></div><div class="skeleton-bar" style="width:75%"></div><div class="skeleton-bar" style="width:60%"></div><div class="skeleton-bar" style="width:55%"></div><div class="skeleton-bar"></div><div class="skeleton-bar" style="width:32px"></div></div>
+        <div class="skeleton-row"><div class="skeleton-bar" style="width:56px"></div><div class="skeleton-bar" style="width:60%"></div><div class="skeleton-bar" style="width:50%"></div><div class="skeleton-bar" style="width:65%"></div><div class="skeleton-bar"></div><div class="skeleton-bar" style="width:32px"></div></div>
+        <div class="skeleton-row"><div class="skeleton-bar" style="width:56px"></div><div class="skeleton-bar" style="width:82%"></div><div class="skeleton-bar" style="width:55%"></div><div class="skeleton-bar" style="width:48%"></div><div class="skeleton-bar"></div><div class="skeleton-bar" style="width:32px"></div></div>
+        <div class="skeleton-row"><div class="skeleton-bar" style="width:56px"></div><div class="skeleton-bar" style="width:68%"></div><div class="skeleton-bar" style="width:58%"></div><div class="skeleton-bar" style="width:60%"></div><div class="skeleton-bar"></div><div class="skeleton-bar" style="width:32px"></div></div>
+        <div class="skeleton-row"><div class="skeleton-bar" style="width:56px"></div><div class="skeleton-bar" style="width:72%"></div><div class="skeleton-bar" style="width:52%"></div><div class="skeleton-bar" style="width:56%"></div><div class="skeleton-bar"></div><div class="skeleton-bar" style="width:32px"></div></div>
+      </div>
+      <div id="error" class="state state-error" hidden></div>
+      <div id="empty" class="state" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+        Kol kas neimportuota mėnesinių pinigų srauto duomenų.
+      </div>
+      <div id="noProjectMatches" class="state" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        Pagal paiešką projektų nerasta.
+      </div>
+
+      <div id="projectRegister" class="register-wrap" hidden>
+        <div class="register-scroll">
+        <table class="register">
+          <thead>
+            <tr>
+              <th style="width:120px"><button class="sort-button" type="button" data-sort="project">Projektas</button></th>
+              <th><button class="sort-button" type="button" data-sort="name">Projekto pavadinimas</button></th>
+              <th style="width:180px"><button class="sort-button" type="button" data-sort="responsible">Atsakingas</button></th>
+              <th style="width:180px"><button class="sort-button" type="button" data-sort="engineer">Inžinierius</button></th>
+              <th style="width:120px" class="col-money"><button class="sort-button" type="button" data-sort="invoiced">Sąskaitose</button></th>
+              <th style="width:120px" class="col-money"><button class="sort-button" type="button" data-sort="remaining">Likutis</button></th>
+              <th style="width:150px"><button class="sort-button" type="button" data-sort="status">Būsena</button></th>
+              <th style="width:92px" class="col-money"><button class="sort-button" type="button" data-sort="warnings">Įspėjimai</button></th>
+              <th class="col-chev" aria-label="Atidaryti"></th>
+            </tr>
+          </thead>
+          <tbody id="projectRegisterBody"></tbody>
+        </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <span>Mėnesinis pinigų srautas</span>
+    <span class="app-footer-sep">&middot;</span>
+    <span id="footerImportText">Paskutinis importas: &mdash;</span>
+  </footer>
+</body>
+</html>
