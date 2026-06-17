@@ -38,6 +38,12 @@ function hide(el) { el.hidden = true; }
 function money(value) { return moneyFormatter.format(Number(value ?? 0)); }
 function numberValue(value) { return Number(value ?? 0); }
 
+/* Project-side remaining: project (client) value minus what has been invoiced
+   to the client — mirrors the detail page's Užsakovas "liko" figure. */
+function projectRemaining(project) {
+  return numberValue(project.projectValue) - numberValue(project.clientInvoiced);
+}
+
 function parseProjectObjectCode(value) {
   const cleaned = String(value ?? "").trim();
   const dashIndex = cleaned.lastIndexOf("-");
@@ -179,8 +185,8 @@ function projectRow(project) {
   if (!fields.engineer) engTd.style.color = "var(--muted-2)";
   tr.append(engTd);
 
-  tr.append(moneyCell(project.amountWithoutVat, "Sąskaitose"));
-  tr.append(moneyCell(project.remaining, "Likutis"));
+  tr.append(moneyCell(project.projectValue, "Projekto vertė"));
+  tr.append(moneyCell(projectRemaining(project), "Likutis"));
 
   const statusTd = statusCell(project);
   statusTd.dataset.label = "Būsena";
@@ -250,8 +256,8 @@ function projectSortValue(project, key) {
   if (key === "name") return sortText(fields.projectName);
   if (key === "responsible") return sortText(fields.responsible);
   if (key === "engineer") return sortText(fields.engineer);
-  if (key === "invoiced") return numberValue(project.amountWithoutVat);
-  if (key === "remaining") return numberValue(project.remaining);
+  if (key === "projectValue") return numberValue(project.projectValue);
+  if (key === "remaining") return projectRemaining(project);
   if (key === "warnings") return numberValue(project.warningsCount);
   if (key === "status") return sortText(project.status);
   return "";

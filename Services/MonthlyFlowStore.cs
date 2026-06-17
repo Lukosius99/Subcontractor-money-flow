@@ -765,6 +765,22 @@ public sealed class MonthlyFlowStore
                 },
                 StringComparer.OrdinalIgnoreCase);
 
+        // Client (SMD) invoiced per project: the complement of the subcontractor
+        // invoice rows, so the list can show project-value remaining (Užsakovas
+        // side) the same way the detail page does. Only rows on a real object
+        // (P####-##) count — bare-parent rows are project-level totals that
+        // duplicate the per-object values, so the detail page excludes them too
+        // (mirrors the frontend isValidClientObjectNumber filter).
+        var clientInvoiceSummaries = rows
+            .Where(row => !string.IsNullOrWhiteSpace(row.ProjectCode))
+            .Where(row => IsClientMonthlyValueProjection(row.RowType, row.SourceSheet))
+            .Where(row => IsValidClientObjectNumber(EffectiveObjectNumber(row.ProjectCode, row.ObjectNumber)))
+            .GroupBy(row => ParentProjectCodeFor(row.ProjectCode, row.ObjectNumber), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Sum(row => row.AmountWithoutVat),
+                StringComparer.OrdinalIgnoreCase);
+
         var contractSummaries = contracts
             .Where(contract => !string.IsNullOrWhiteSpace(contract.ProjectCode))
             .GroupBy(contract => ParentProjectCodeFor(contract.ProjectCode, contract.ObjectNumber), StringComparer.OrdinalIgnoreCase)
@@ -967,6 +983,7 @@ public sealed class MonthlyFlowStore
                 contractSummaries.TryGetValue(projectCode, out var contract);
                 projectRecordSummaries.TryGetValue(projectCode, out var projectRecord);
                 projectValueSummaries.TryGetValue(projectCode, out var projectValue);
+                clientInvoiceSummaries.TryGetValue(projectCode, out var clientInvoiced);
                 var invoiced = invoice?.AmountWithoutVat ?? 0;
                 var contracted = contract?.ContractedAmount ?? 0;
 
@@ -1016,7 +1033,8 @@ public sealed class MonthlyFlowStore
                     contract?.LastSeenContractImportAt ?? projectRecord?.LastSeenContractImportAt,
                     contract?.BecameInactiveAt ?? projectRecord?.BecameInactiveAt,
                     objectSummaries.TryGetValue(projectCode, out objects) ? objects : [],
-                    projectValue?.ProjectValueAmount ?? 0);
+                    projectValue?.ProjectValueAmount ?? 0,
+                    clientInvoiced);
             })
             .OrderBy(summary => summary.ProjectCode)
             .ToList();
@@ -2951,6 +2969,12 @@ public sealed class MonthlyFlowStore
             cleaned[(dashIndex + 1)..]);
     }
 
+    // A real per-object code (P####-##). Bare project codes and malformed
+    // values are rejected, matching the frontend isValidClientObjectNumber so
+    // project-level summary rows don't get double-counted.
+    private static bool IsValidClientObjectNumber(string? value) =>
+        Regex.IsMatch((value ?? string.Empty).Trim(), @"^P\d{4}-\d{2}$", RegexOptions.IgnoreCase);
+
     private static string EffectiveObjectNumber(string projectCode, string? objectNumber)
     {
         var cleanObjectNumber = CleanText(objectNumber);
@@ -3095,7 +3119,8 @@ public sealed record ProjectSummary(
     DateTimeOffset? LastSeenContractImportAt,
     DateTimeOffset? BecameInactiveAt,
     IReadOnlyCollection<ProjectObjectSummary> Objects,
-    decimal ProjectValue);
+    decimal ProjectValue,
+    decimal ClientInvoiced);
 
 public sealed record ProjectObjectSummary(
     string ObjectNumber,
