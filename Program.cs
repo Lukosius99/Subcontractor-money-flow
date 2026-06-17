@@ -18,6 +18,13 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 });
 
+// Cap request bodies so an oversized POST can't exhaust memory. The largest
+// real import is well under 1 MB; 10 MB is a generous ceiling.
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 10 * 1024 * 1024;
+});
+
 // Resolve the SQLite database path. Order of precedence:
 //   1. MoneyFlow:DatabasePath in appsettings (.Production.json overrides base).
 //   2. MONEY_FLOW_DB_PATH environment variable.
@@ -39,7 +46,22 @@ builder.Services.AddDbContextFactory<MoneyFlowDbContext>(options =>
 builder.Services.AddSingleton<MonthlyFlowStore>();
 builder.Services.AddSingleton<MonthlyFlowImportService>();
 
+// API key for write endpoints (imports + deletes). Resolved from, in order:
+//   1. MoneyFlow:ApiKey in appsettings / MoneyFlow__ApiKey env var.
+//   2. MONEY_FLOW_API_KEY environment variable.
+// Leave unset and the check is disabled (warned at startup) so the app keeps
+// working until the key is configured; once set, write endpoints require it.
+var apiKey = builder.Configuration["MoneyFlow:ApiKey"]
+    ?? Environment.GetEnvironmentVariable("MONEY_FLOW_API_KEY");
+
 var app = builder.Build();
+
+if (string.IsNullOrWhiteSpace(apiKey))
+{
+    app.Logger.LogWarning(
+        "MoneyFlow API key is not configured. Import and delete endpoints are UNPROTECTED. " +
+        "Set the MONEY_FLOW_API_KEY environment variable to require a key.");
+}
 
 await app.Services.GetRequiredService<MonthlyFlowStore>()
     .CleanupDuplicatePeriodsAsync(CancellationToken.None);
@@ -59,6 +81,33 @@ app.UseStaticFiles(new StaticFileOptions
         }
     }
 });
+
+// Gate the PAD bulk-ingestion endpoints (POST /api/imports/*) behind the API key.
+// Everything else — read-only GETs and the browser-driven manual link/assignment
+// edits (which the frontend calls without a key) — stays open, matching the
+// app's trusted-internal-network model.
+app.Use(async (context, next) =>
+{
+    var isImport = context.Request.Path.StartsWithSegments("/api/imports")
+        && HttpMethods.IsPost(context.Request.Method);
+
+    if (isImport && !string.IsNullOrWhiteSpace(apiKey))
+    {
+        var provided = context.Request.Headers["X-Api-Key"].FirstOrDefault();
+        if (!string.Equals(provided, apiKey, StringComparison.Ordinal))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(new { error = "Missing or invalid API key." });
+            return;
+        }
+    }
+
+    await next();
+});
+
+// Lightweight liveness probe — confirms the service is up without touching the
+// database or the real API. Intentionally open (no API key required).
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapPost("/api/imports/monthly-flow", async (
     HttpRequest request,
