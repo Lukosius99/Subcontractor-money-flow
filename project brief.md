@@ -47,7 +47,7 @@ The main business goal is to help finance, project managers, engineers, and resp
 - `data/` contains the default app database location for local/non-production runs.
 - `test-data/` contains local test databases, generated logs, and sample import data.
 - `start-local.bat` and `reset-local-db.bat` support double-click local development workflows.
-- `Install-MoneyFlow.ps1`, `Start-MoneyFlow.ps1`, `Stop-MoneyFlow.ps1`, and `Clean-MoneyFlowDB.ps1` support Windows operation workflows.
+- `Start-MoneyFlow.ps1`, `Stop-MoneyFlow.ps1`, and `Clean-MoneyFlowDB.ps1` support Windows operation workflows.
 
 ## Application Architecture
 
@@ -270,7 +270,6 @@ New-Item -ItemType Directory -Force -Path "C:\ProgramData\PADS\MoneyFlow"
 
 Supporting service scripts:
 
-- `Install-MoneyFlow.ps1`: installs and starts the Windows Service.
 - `Start-MoneyFlow.ps1`: starts the service and performs a simple HTTP check.
 - `Stop-MoneyFlow.ps1`: stops the service.
 - `Clean-MoneyFlowDB.ps1`: supports database cleanup workflows.
