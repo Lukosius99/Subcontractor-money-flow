@@ -266,6 +266,7 @@ app.MapGet("/api/projects", async (
         amountWithoutVat = project.AmountWithoutVat,
         contractedAmount = project.ContractedAmount,
         projectValue = project.ProjectValue,
+        clientInvoiced = project.ClientInvoiced,
         remaining = project.Remaining,
         rowCount = project.RowCount,
         subcontractorCount = project.SubcontractorCount,
