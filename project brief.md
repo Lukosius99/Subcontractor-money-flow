@@ -46,8 +46,7 @@ The main business goal is to help finance, project managers, engineers, and resp
 - `docs/` contains deployment and data cleanup notes.
 - `data/` contains the default app database location for local/non-production runs.
 - `test-data/` contains local test databases, generated logs, and sample import data.
-- `start-local.bat` and `reset-local-db.bat` support double-click local development workflows.
-- `Install-MoneyFlow.ps1`, `Start-MoneyFlow.ps1`, `Stop-MoneyFlow.ps1`, and `Clean-MoneyFlowDB.ps1` support Windows operation workflows.
+- `Start-MoneyFlow.ps1`, `Stop-MoneyFlow.ps1`, and `Clean-MoneyFlowDB.ps1` support Windows operation workflows.
 
 ## Application Architecture
 
@@ -178,30 +177,18 @@ Indexes enforce key behaviors such as unique import content hashes, unique month
 
 ## Local Development Workflow
 
-Use `start-local.bat` for the normal local workflow:
-
-1. Double-click or run `start-local.bat`.
-2. The script sets `ASPNETCORE_ENVIRONMENT=Development`.
-3. The app starts at `http://localhost:5000`.
-4. The script uses `test-data/local-dev.db` as the local SQLite database.
-5. On first launch, it can seed local data from `C:\ProgramData\PADS\MoneyFlow\monthly-money-flow.db` if present.
-6. The script checks that port `5000` is not already in use.
-7. The browser opens automatically after startup.
-
-Use `reset-local-db.bat` to clear only the local development database:
-
-1. Run `reset-local-db.bat`.
-2. Confirm the prompt.
-3. The script deletes `test-data/local-dev.db` and SQLite sidecar files.
-4. The next local launch creates a fresh empty database.
-
-Manual local run:
+Run the app locally against a throwaway database (does not touch the production
+service or the ProgramData database). Stop the production service first if it is
+already using port 5000.
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = "Development"
 $env:MONEY_FLOW_DB_PATH = "test-data/local-dev.db"
 dotnet run --urls http://localhost:5000
 ```
+
+Delete `test-data/local-dev.db` (and its `-wal`/`-shm` sidecars) to start the
+next local run from an empty database.
 
 ## Testing and Verification Workflow
 
@@ -270,7 +257,6 @@ New-Item -ItemType Directory -Force -Path "C:\ProgramData\PADS\MoneyFlow"
 
 Supporting service scripts:
 
-- `Install-MoneyFlow.ps1`: installs and starts the Windows Service.
 - `Start-MoneyFlow.ps1`: starts the service and performs a simple HTTP check.
 - `Stop-MoneyFlow.ps1`: stops the service.
 - `Clean-MoneyFlowDB.ps1`: supports database cleanup workflows.
