@@ -1,4 +1,4 @@
-# Deploy-MoneyFlow.ps1 — One-click deploy for the PADS MoneyFlow app
+﻿# Deploy-MoneyFlow.ps1 — One-click deploy for the PADS MoneyFlow app
 # ---------------------------------------------------------------------------
 # Run this ONCE on a fresh machine after cloning/downloading the repo:
 #   Right-click  ->  Run with PowerShell   (it will request Administrator)

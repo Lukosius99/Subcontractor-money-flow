@@ -31,6 +31,10 @@ public sealed class MonthlyFlowStore
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         await db.Database.EnsureCreatedAsync(cancellationToken);
+        // Write-Ahead Logging lets dashboard reads proceed concurrently with an
+        // import write instead of blocking on it. The setting is persisted in the
+        // database header, so running it on each startup is idempotent.
+        await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
         await EnsureMasterDataTablesAsync(db, cancellationToken);
         await SeedConfiguredSubcontractorAliasesAsync(db, cancellationToken);
         await BackfillSubcontractorIdentityAsync(db, cancellationToken);
@@ -169,21 +173,6 @@ public sealed class MonthlyFlowStore
         {
             _lock.Release();
         }
-    }
-
-    public async Task<IReadOnlyCollection<MonthlyMoneyFlowRow>> GetRowsByProjectCodeAsync(
-        string projectCode,
-        CancellationToken cancellationToken)
-    {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        return await db.MonthlyFlowRows
-            .AsNoTracking()
-            .Where(row => row.ProjectCode.ToLower() == projectCode.ToLower())
-            .OrderBy(row => row.Year)
-            .ThenBy(row => row.Month)
-            .ThenBy(row => row.SourceSheet)
-            .ThenBy(row => row.SourceRow)
-            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyCollection<MonthlyMoneyFlowRow>> GetRowsForProjectScopeAsync(
@@ -570,13 +559,6 @@ public sealed class MonthlyFlowStore
 
     public async Task<ProjectDetailSnapshot> GetProjectDetailAsync(
         string projectCode,
-        CancellationToken cancellationToken)
-    {
-        return await GetProjectDetailAsync(projectCode, null, cancellationToken);
-    }
-
-    public async Task<ProjectDetailSnapshot> GetProjectDetailAsync(
-        string projectCode,
         string? objectNumber,
         CancellationToken cancellationToken)
     {
@@ -676,22 +658,6 @@ public sealed class MonthlyFlowStore
                 row.ObjectNumber = target;
             }
         }
-    }
-
-    public async Task<IReadOnlyCollection<string>> GetProjectCodesAsync(CancellationToken cancellationToken)
-    {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var projectCodes = await db.MonthlyFlowRows
-            .AsNoTracking()
-            .Where(row => row.ProjectCode != "")
-            .Select(row => row.ProjectCode)
-            .ToListAsync(cancellationToken);
-
-        return projectCodes
-            .Where(projectCode => !string.IsNullOrWhiteSpace(projectCode))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(projectCode => projectCode)
-            .ToList();
     }
 
     public async Task<IReadOnlyCollection<ProjectSummary>> GetProjectSummariesAsync(CancellationToken cancellationToken)
@@ -2005,6 +1971,19 @@ public sealed class MonthlyFlowStore
             """, cancellationToken);
     }
 
+    // Tables whose schema this code may ALTER. An ALTER TABLE cannot bind its
+    // identifiers as parameters, so the table name is validated against this
+    // allowlist before it is ever interpolated into DDL — even though all current
+    // callers pass hardcoded literals.
+    private static readonly HashSet<string> AllowedSchemaTables = new(StringComparer.Ordinal)
+    {
+        "SubcontractorContracts",
+        "ImportBatches",
+        "MonthlyFlowRows",
+        "SubcontractorAliases",
+        "Projects",
+    };
+
     private static async Task AddColumnIfMissingAsync(
         MoneyFlowDbContext db,
         string tableName,
@@ -2012,13 +1991,15 @@ public sealed class MonthlyFlowStore
         string definition,
         CancellationToken cancellationToken)
     {
-        // Detect existing columns and run the ALTER through EF's own connection
-        // management. The previous approach manually opened the shared DbConnection
-        // for the PRAGMA read, which left it in a state SQLite reported as read-only
-        // when the ALTER ran on that same connection. tableName is a hardcoded
-        // internal identifier, so string interpolation here carries no injection risk.
+        if (!AllowedSchemaTables.Contains(tableName))
+        {
+            throw new ArgumentException($"Unknown schema table '{tableName}'.", nameof(tableName));
+        }
+
+        // pragma_table_info accepts a bound parameter, so SqlQuery (interpolated →
+        // parameterized) reads the existing columns with no raw-SQL interpolation.
         var existingColumns = await db.Database
-            .SqlQueryRaw<string>($"SELECT name AS Value FROM pragma_table_info('{tableName}')")
+            .SqlQuery<string>($"SELECT name AS Value FROM pragma_table_info({tableName})")
             .ToListAsync(cancellationToken);
 
         if (existingColumns.Any(name => string.Equals(name, columnName, StringComparison.OrdinalIgnoreCase)))
@@ -2026,6 +2007,8 @@ public sealed class MonthlyFlowStore
             return;
         }
 
+        // tableName is allowlisted above; columnName/definition are hardcoded
+        // internal literals. Identifiers cannot be parameterized in DDL.
         var sql = $"ALTER TABLE {tableName} ADD COLUMN {columnName} {definition};";
         await db.Database.ExecuteSqlRawAsync(sql, cancellationToken);
     }
@@ -2713,23 +2696,6 @@ public sealed class MonthlyFlowStore
         return score;
     }
 
-    // Lithuanian legal-form phrases (multi-word). Checked longest-first so the
-    // longer phrase wins before its shorter subset (e.g. "uždaroji akcinė
-    // bendrovė" before "akcinė bendrovė").
-    private static readonly string[] SubcontractorLegalFormPhrases =
-    {
-        "uždaroji akcinė bendrovė",
-        "akcinė bendrovė",
-        "mažoji bendrija",
-        "individuali įmonė",
-    };
-
-    // Single-token Lithuanian legal forms (already lowercased).
-    private static readonly HashSet<string> SubcontractorLegalFormTokens = new(StringComparer.Ordinal)
-    {
-        "uab", "ab", "mb", "všį", "iį", "vį", "ūb", "tūb", "kb",
-    };
-
     private static readonly IReadOnlyCollection<LegalFormPattern> SubcontractorLegalForms =
     [
         new("SP Z O O", ["SP", "Z", "O", "O"]),
@@ -2945,43 +2911,6 @@ public sealed class MonthlyFlowStore
 
         text = CollapseWhitespace(text);
         return string.IsNullOrWhiteSpace(text) ? null : text;
-    }
-
-    private static bool TokensStartWith(List<string> tokens, string[] prefix)
-    {
-        if (tokens.Count < prefix.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < prefix.Length; i++)
-        {
-            if (!string.Equals(tokens[i], prefix[i], StringComparison.Ordinal))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool TokensEndWith(List<string> tokens, string[] suffix)
-    {
-        if (tokens.Count < suffix.Length)
-        {
-            return false;
-        }
-
-        var offset = tokens.Count - suffix.Length;
-        for (var i = 0; i < suffix.Length; i++)
-        {
-            if (!string.Equals(tokens[offset + i], suffix[i], StringComparison.Ordinal))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private static string? NullIfWhiteSpace(string? value)
