@@ -175,21 +175,6 @@ public sealed class MonthlyFlowStore
         }
     }
 
-    public async Task<IReadOnlyCollection<MonthlyMoneyFlowRow>> GetRowsByProjectCodeAsync(
-        string projectCode,
-        CancellationToken cancellationToken)
-    {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        return await db.MonthlyFlowRows
-            .AsNoTracking()
-            .Where(row => row.ProjectCode.ToLower() == projectCode.ToLower())
-            .OrderBy(row => row.Year)
-            .ThenBy(row => row.Month)
-            .ThenBy(row => row.SourceSheet)
-            .ThenBy(row => row.SourceRow)
-            .ToListAsync(cancellationToken);
-    }
-
     public async Task<IReadOnlyCollection<MonthlyMoneyFlowRow>> GetRowsForProjectScopeAsync(
         string projectCode,
         string? objectNumber,
@@ -574,13 +559,6 @@ public sealed class MonthlyFlowStore
 
     public async Task<ProjectDetailSnapshot> GetProjectDetailAsync(
         string projectCode,
-        CancellationToken cancellationToken)
-    {
-        return await GetProjectDetailAsync(projectCode, null, cancellationToken);
-    }
-
-    public async Task<ProjectDetailSnapshot> GetProjectDetailAsync(
-        string projectCode,
         string? objectNumber,
         CancellationToken cancellationToken)
     {
@@ -680,22 +658,6 @@ public sealed class MonthlyFlowStore
                 row.ObjectNumber = target;
             }
         }
-    }
-
-    public async Task<IReadOnlyCollection<string>> GetProjectCodesAsync(CancellationToken cancellationToken)
-    {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var projectCodes = await db.MonthlyFlowRows
-            .AsNoTracking()
-            .Where(row => row.ProjectCode != "")
-            .Select(row => row.ProjectCode)
-            .ToListAsync(cancellationToken);
-
-        return projectCodes
-            .Where(projectCode => !string.IsNullOrWhiteSpace(projectCode))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(projectCode => projectCode)
-            .ToList();
     }
 
     public async Task<IReadOnlyCollection<ProjectSummary>> GetProjectSummariesAsync(CancellationToken cancellationToken)
@@ -2734,23 +2696,6 @@ public sealed class MonthlyFlowStore
         return score;
     }
 
-    // Lithuanian legal-form phrases (multi-word). Checked longest-first so the
-    // longer phrase wins before its shorter subset (e.g. "uždaroji akcinė
-    // bendrovė" before "akcinė bendrovė").
-    private static readonly string[] SubcontractorLegalFormPhrases =
-    {
-        "uždaroji akcinė bendrovė",
-        "akcinė bendrovė",
-        "mažoji bendrija",
-        "individuali įmonė",
-    };
-
-    // Single-token Lithuanian legal forms (already lowercased).
-    private static readonly HashSet<string> SubcontractorLegalFormTokens = new(StringComparer.Ordinal)
-    {
-        "uab", "ab", "mb", "všį", "iį", "vį", "ūb", "tūb", "kb",
-    };
-
     private static readonly IReadOnlyCollection<LegalFormPattern> SubcontractorLegalForms =
     [
         new("SP Z O O", ["SP", "Z", "O", "O"]),
@@ -2966,43 +2911,6 @@ public sealed class MonthlyFlowStore
 
         text = CollapseWhitespace(text);
         return string.IsNullOrWhiteSpace(text) ? null : text;
-    }
-
-    private static bool TokensStartWith(List<string> tokens, string[] prefix)
-    {
-        if (tokens.Count < prefix.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < prefix.Length; i++)
-        {
-            if (!string.Equals(tokens[i], prefix[i], StringComparison.Ordinal))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool TokensEndWith(List<string> tokens, string[] suffix)
-    {
-        if (tokens.Count < suffix.Length)
-        {
-            return false;
-        }
-
-        var offset = tokens.Count - suffix.Length;
-        for (var i = 0; i < suffix.Length; i++)
-        {
-            if (!string.Equals(tokens[offset + i], suffix[i], StringComparison.Ordinal))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private static string? NullIfWhiteSpace(string? value)
