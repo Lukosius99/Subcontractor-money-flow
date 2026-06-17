@@ -31,6 +31,10 @@ public sealed class MonthlyFlowStore
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         await db.Database.EnsureCreatedAsync(cancellationToken);
+        // Write-Ahead Logging lets dashboard reads proceed concurrently with an
+        // import write instead of blocking on it. The setting is persisted in the
+        // database header, so running it on each startup is idempotent.
+        await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
         await EnsureMasterDataTablesAsync(db, cancellationToken);
         await SeedConfiguredSubcontractorAliasesAsync(db, cancellationToken);
         await BackfillSubcontractorIdentityAsync(db, cancellationToken);
@@ -2005,6 +2009,19 @@ public sealed class MonthlyFlowStore
             """, cancellationToken);
     }
 
+    // Tables whose schema this code may ALTER. An ALTER TABLE cannot bind its
+    // identifiers as parameters, so the table name is validated against this
+    // allowlist before it is ever interpolated into DDL — even though all current
+    // callers pass hardcoded literals.
+    private static readonly HashSet<string> AllowedSchemaTables = new(StringComparer.Ordinal)
+    {
+        "SubcontractorContracts",
+        "ImportBatches",
+        "MonthlyFlowRows",
+        "SubcontractorAliases",
+        "Projects",
+    };
+
     private static async Task AddColumnIfMissingAsync(
         MoneyFlowDbContext db,
         string tableName,
@@ -2012,13 +2029,15 @@ public sealed class MonthlyFlowStore
         string definition,
         CancellationToken cancellationToken)
     {
-        // Detect existing columns and run the ALTER through EF's own connection
-        // management. The previous approach manually opened the shared DbConnection
-        // for the PRAGMA read, which left it in a state SQLite reported as read-only
-        // when the ALTER ran on that same connection. tableName is a hardcoded
-        // internal identifier, so string interpolation here carries no injection risk.
+        if (!AllowedSchemaTables.Contains(tableName))
+        {
+            throw new ArgumentException($"Unknown schema table '{tableName}'.", nameof(tableName));
+        }
+
+        // pragma_table_info accepts a bound parameter, so SqlQuery (interpolated →
+        // parameterized) reads the existing columns with no raw-SQL interpolation.
         var existingColumns = await db.Database
-            .SqlQueryRaw<string>($"SELECT name AS Value FROM pragma_table_info('{tableName}')")
+            .SqlQuery<string>($"SELECT name AS Value FROM pragma_table_info({tableName})")
             .ToListAsync(cancellationToken);
 
         if (existingColumns.Any(name => string.Equals(name, columnName, StringComparison.OrdinalIgnoreCase)))
@@ -2026,6 +2045,8 @@ public sealed class MonthlyFlowStore
             return;
         }
 
+        // tableName is allowlisted above; columnName/definition are hardcoded
+        // internal literals. Identifiers cannot be parameterized in DDL.
         var sql = $"ALTER TABLE {tableName} ADD COLUMN {columnName} {definition};";
         await db.Database.ExecuteSqlRawAsync(sql, cancellationToken);
     }
