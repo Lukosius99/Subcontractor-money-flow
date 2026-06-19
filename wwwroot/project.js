@@ -40,6 +40,7 @@ const projectMeta = document.querySelector("#projectMeta");
 const latestImportMeta = document.querySelector("#latestImportMeta");
 const latestImportText = document.querySelector("#latestImportText");
 const totalsScopeNote = document.querySelector("#totalsScopeNote");
+const subPanelSub = document.querySelector("#subPanelSub");
 const kpiCards = document.querySelector("#kpiCards");
 const objectScope = document.querySelector("#objectScope");
 const objectScopeCards = document.querySelector("#objectScopeCards");
@@ -332,6 +333,34 @@ function renderProjectMeta() {
   if (engineers.length > 0) fields.push(...metaField("Inžinierius", summarizeValues(engineers, "-")));
   projectMeta.append(...fields);
   projectMeta.hidden = fields.length === 0;
+  renderSubPanelScope();
+}
+
+/* Lead the subcontractor panel with its scope so single-object projects —
+   which drop the "Objektas" column — still state which object they cover. */
+function renderSubPanelScope() {
+  if (!subPanelSub) return;
+  const objects = projectDetail.objects ?? [];
+  let scope;
+  if (selectedObjectNumber) {
+    const match = objects.find((o) =>
+      String(o.objectNumber).toLowerCase() === selectedObjectNumber.toLowerCase());
+    scope = [`Objektas ${selectedObjectNumber}`, match?.departmentCode].filter(Boolean).join(" · ");
+  } else if (objects.length === 1) {
+    scope = [`Objektas ${objects[0].objectNumber}`, objects[0].departmentCode].filter(Boolean).join(" · ");
+  } else if (objects.length > 1) {
+    scope = `Visi objektai · ${objects.length} objekt${objects.length === 1 ? "as" : "ai"}`;
+  }
+
+  const hint = "Sutartys susietos su mėnesinėmis sąskaitomis, EUR be PVM. Spustelėkite eilutę, kad pamatytumėte detales.";
+  subPanelSub.replaceChildren();
+  if (scope) {
+    const strong = document.createElement("strong");
+    strong.textContent = scope;
+    subPanelSub.append(strong, ` · ${hint}`);
+  } else {
+    subPanelSub.append(hint);
+  }
 }
 
 function monthKey(group) {
@@ -1057,7 +1086,7 @@ function headerButton(text, key, className, help) {
 
 function tableColumns(monthKeys) {
   return [
-    ...(isAllObjectsView ? [{ text: "Objektas", key: "object", cls: "" }] : []),
+    { text: "Objektas", key: "object", cls: "" },
     { text: "Padalinys", key: "department", cls: "" },
     { text: "Subrangovas", key: "name", cls: "" },
     { text: "Sutarta €", key: "contracted", cls: "col-money col-sep" },
@@ -1203,7 +1232,7 @@ function appendObjectCell(tr, summary) {
   const cell = document.createElement("td");
   cell.className = "col-code";
 
-  if (editMode && isEditableObjectRow(summary)) {
+  if (isAllObjectsView && editMode && isEditableObjectRow(summary)) {
     const input = document.createElement("input");
     input.type = "text";
     input.className = "object-edit-input";
@@ -1297,9 +1326,7 @@ function renderContractTable(contractRows, monthKeys) {
     if (selectedSummaryKey && summaryKey(summary) === selectedSummaryKey) tr.classList.add("is-selected");
     renderedContractRows.push({ tr, summary });
 
-    if (isAllObjectsView) {
-      appendObjectCell(tr, summary);
-    }
+    appendObjectCell(tr, summary);
 
     appendTextCell(tr, summary.departmentCode || "-", summary.departmentCode ? "" : "cell-quiet");
     const nameCell = appendTextCell(tr, summary.name, "subcontractor-name");
@@ -1416,7 +1443,7 @@ function renderContractTable(contractRows, monthKeys) {
   const totalStatus = statusClass(deriveStatus(totals.contracted, totals.invoiced));
 
   const footRow = document.createElement("tr");
-  if (isAllObjectsView) appendTextCell(footRow, "");
+  appendTextCell(footRow, "");
   appendTextCell(footRow, "");
   appendTextCell(footRow, "IŠ VISO · subrangovai", "subcontractor-name is-strong");
   appendMoneyCell(footRow, totals.contracted, { emphasize: true }).classList.add("col-sep");
@@ -2033,10 +2060,8 @@ function buildDepartmentSummaryRows(monthKeys) {
     const tr = document.createElement("tr");
     tr.className = "is-department-row";
 
-    if (isAllObjectsView) {
-      const objects = [...entry.objects];
-      appendTextCell(tr, objects.length === 1 ? objects[0] : `${objects.length} objekt${objects.length === 1 ? "as" : "ai"}`, "col-code");
-    }
+    const objects = [...entry.objects];
+    appendTextCell(tr, objects.length === 1 ? objects[0] : `${objects.length} objekt${objects.length === 1 ? "as" : "ai"}`, "col-code");
     appendTextCell(tr, entry.dept || "—", entry.dept ? "col-code" : "cell-quiet");
     const nameCell = appendTextCell(tr, [...entry.clients][0] || "Užsakovo vertė", "subcontractor-name");
     const badge = document.createElement("span");
