@@ -44,6 +44,9 @@
   --line-2:       #EDF0F5;
   --line-strong:  #CBD2DC;
 
+  /* Brand — Kauno Tiltai cyan, used for the logo mark */
+  --brand:        #009EE0;
+
   /* Accent — links, focus, active tab, selection */
   --accent:       #2563EB;
   --accent-hov:   #1D4FD7;
@@ -64,6 +67,12 @@
   --danger-strong:#DC2626;
   --danger-soft:  #FDECEC;
   --danger-line:  #F5C8C6;
+  /* full — "no remaining" (exactly 100%): deep navy. A neutral milestone tone —
+     budget complete, not alarming — distinct from the brighter link accent. */
+  --full:         #1E3A8A;
+  --full-strong:  #1E40AF;
+  --full-soft:    #EBEEFB;
+  --full-line:    #C7D2F2;
 
   /* Elevation */
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
@@ -114,6 +123,10 @@
     --danger-strong:oklch(0.58 0.210 27);
     --danger-soft:  oklch(0.962 0.020 25);
     --danger-line:  oklch(0.900 0.048 25);
+    --full:         oklch(0.38 0.130 265);
+    --full-strong:  oklch(0.45 0.165 265);
+    --full-soft:    oklch(0.960 0.024 265);
+    --full-line:    oklch(0.882 0.060 265);
   }
 }
 
@@ -159,8 +172,10 @@ a:hover { color: var(--accent-hov); text-decoration: underline; }
   height: 28px;
   flex: none;
   color: #fff;
-  background: var(--accent);
-  border-radius: 8px;
+  background: var(--brand);
+  /* Kauno Tiltai mark: square with a single large rounded bottom-right corner
+     (top-left / top-right / bottom-right / bottom-left) */
+  border-radius: 2px 2px 11px 2px;
 }
 .brand-mark svg { width: 16px; height: 16px; }
 
@@ -397,12 +412,14 @@ body.drawer-open .detail-layout {
   font-variant-numeric: tabular-nums;
 }
 .strip-ok .strip-chip-count     { color: var(--ok);     background: var(--ok-soft);     border-color: var(--ok-line); }
+.strip-full .strip-chip-count   { color: var(--full);   background: var(--full-soft);   border-color: var(--full-line); }
 .strip-warn .strip-chip-count   { color: var(--warn);   background: var(--warn-soft);   border-color: var(--warn-line); }
 .strip-danger .strip-chip-count { color: var(--danger); background: var(--danger-soft); border-color: var(--danger-line); }
 
 .strip-chip.is-active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-line); }
 .strip-chip.is-active:hover { border-color: var(--accent); }
 .strip-danger.is-active { color: var(--danger); background: var(--danger-soft); border-color: var(--danger-line); }
+.strip-full.is-active   { color: var(--full);   background: var(--full-soft);   border-color: var(--full-line); }
 .strip-warn.is-active   { color: var(--warn);   background: var(--warn-soft);   border-color: var(--warn-line); }
 .strip-ok.is-active     { color: var(--ok);     background: var(--ok-soft);     border-color: var(--ok-line); }
 
@@ -580,6 +597,112 @@ body.drawer-open .detail-layout {
 .btn:active { background: var(--line-2); transform: translateY(0.5px); }
 .btn.is-active { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
 .btn svg { width: 14px; height: 14px; flex: none; }
+
+/* Filled action buttons — used as the primary CTA in dialogs */
+.btn-primary { color: #fff; background: var(--accent); border-color: var(--accent); }
+.btn-primary:hover { color: #fff; background: var(--accent-hov); border-color: var(--accent-hov); }
+.btn-danger { color: #fff; background: var(--danger-strong); border-color: var(--danger-strong); }
+.btn-danger:hover { color: #fff; background: var(--danger); border-color: var(--danger); }
+.btn-primary:focus-visible,
+.btn-danger:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
+
+/* ─── Modal dialog (confirm / alert) ─────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.55);
+  animation: modal-backdrop-in 160ms var(--ease-out);
+}
+.modal-backdrop.is-closing { animation: modal-backdrop-out 110ms var(--ease-out) forwards; }
+
+.modal {
+  width: 100%;
+  max-width: 400px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  animation: modal-in 180ms var(--ease-out);
+}
+.modal-backdrop.is-closing .modal { animation: modal-out 110ms var(--ease-out) forwards; }
+
+.modal-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.modal-subject {
+  margin: 10px 0 0;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+/* Stacked vertically so long subcontractor names show in full (wrap, never
+   truncate) instead of being clipped side-by-side. */
+.modal-transfer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: 12px;
+}
+.modal-chip {
+  padding: 7px 10px;
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.modal-chip.is-target {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.modal-transfer-arrow {
+  width: 16px;
+  height: 16px;
+  color: var(--muted-2);
+  align-self: center;
+  transform: rotate(90deg);
+}
+.modal-message {
+  margin: 12px 0 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.modal-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+.modal-actions .btn { height: 34px; padding: 0 16px; }
+
+@keyframes modal-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes modal-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.98); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop, .modal, .modal-backdrop.is-closing, .modal-backdrop.is-closing .modal { animation: none; }
+}
 
 .btn-link {
   display: inline-flex;
@@ -799,6 +922,27 @@ table.imported-table tbody tr:last-child td { border-bottom: 0; }
   white-space: nowrap;
 }
 
+/* Numeric headers must align with the right-aligned data beneath them. The
+   thead rule sets text-align:left, and the sort-button is an inline-flex that
+   ignores text-align, so push both to the right edge for the money/number
+   columns. */
+table.register thead th.col-num,
+table.register thead th.col-money,
+table.contract-table thead th.col-num,
+table.contract-table thead th.col-money,
+table.imported-table thead th.col-num,
+table.imported-table thead th.col-money {
+  text-align: right;
+}
+table.register thead th.col-num .sort-button,
+table.register thead th.col-money .sort-button,
+table.contract-table thead th.col-num .sort-button,
+table.contract-table thead th.col-money .sort-button,
+table.imported-table thead th.col-num .sort-button,
+table.imported-table thead th.col-money .sort-button {
+  justify-content: flex-end;
+}
+
 .col-code {
   color: var(--ink);
   font-weight: 600;
@@ -872,6 +1016,7 @@ table.imported-table tbody tr:last-child td { border-bottom: 0; }
 }
 .pill-ok      { color: var(--ok);     background: var(--ok-soft);     border-color: var(--ok-line); }
 .pill-warn    { color: var(--warn);   background: var(--warn-soft);   border-color: var(--warn-line); }
+.pill-full    { color: var(--full);   background: var(--full-soft);   border-color: var(--full-line); }
 .pill-danger  { color: var(--danger); background: var(--danger-soft); border-color: var(--danger-line); }
 .pill-neutral { color: var(--muted);  background: var(--surface-alt); border-color: var(--line); }
 
@@ -893,6 +1038,14 @@ table.imported-table tbody tr:last-child td { border-bottom: 0; }
   background: var(--ok-strong);
   opacity: 0.55;
 }
+/* Status as plain colored dot + text (no pill) — same calm treatment as the
+   on-track state, but carrying each status's own colour. */
+.status-quiet.is-over { color: var(--danger); }
+.status-quiet.is-over::before { background: var(--danger-strong); opacity: 1; }
+.status-quiet.is-full { color: var(--full); }
+.status-quiet.is-full::before { background: var(--full-strong); opacity: 1; }
+.status-quiet.is-warn { color: var(--warn); }
+.status-quiet.is-warn::before { background: var(--warn-strong); opacity: 1; }
 
 .cell-quiet { color: var(--muted-2); }
 
@@ -1181,6 +1334,7 @@ table.imported-table tbody tr:last-child td { border-bottom: 0; }
 }
 /* status borders mark only what needs a look; healthy cards stay plain */
 .scope-card.status-warn    { border-bottom: 3px solid var(--warn-strong); }
+.scope-card.status-full    { border-bottom: 3px solid var(--full-strong); }
 .scope-card.status-danger  { border-bottom: 3px solid var(--danger-strong); }
 .scope-card.status-neutral { border-bottom: 3px solid var(--line-strong); }
 .scope-card.is-active {
@@ -1335,7 +1489,7 @@ table.imported-table tbody tr:last-child td { border-bottom: 0; }
 }
 .panel-tools {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
   margin-left: auto;
@@ -1522,9 +1676,10 @@ table.contract-table tfoot td { padding-left: 10px; padding-right: 10px; }
   background: var(--muted-2);
   transition: width 400ms var(--ease-out);
 }
-.usage-fill.ok   { background: var(--ok-strong); }
-.usage-fill.warn { background: var(--warn-strong); }
-.usage-fill.over { background: var(--danger-strong); }
+.usage-fill.ok    { background: var(--ok-strong); }
+.usage-fill.warn  { background: var(--warn-strong); }
+.usage-fill.full  { background: var(--full-strong); }
+.usage-fill.over  { background: var(--danger-strong); }
 .usage-num {
   display: inline-block;
   min-width: 36px;
@@ -1533,8 +1688,9 @@ table.contract-table tfoot td { padding-left: 10px; padding-right: 10px; }
   font-size: 12px;
   font-weight: 550;
 }
-.usage-num.warn { color: var(--warn); }
-.usage-num.over { color: var(--danger); font-weight: 650; }
+.usage-num.warn  { color: var(--warn); }
+.usage-num.full  { color: var(--full); font-weight: 600; }
+.usage-num.over  { color: var(--danger); font-weight: 650; }
 
 /* row state hints */
 table.contract-table tbody tr.is-imported-only,
@@ -1843,6 +1999,7 @@ body.drawer-open .drawer {
 }
 .drawer-head.drawer-status-danger { border-top: 4px solid var(--danger-strong); }
 .drawer-head.drawer-status-warn   { border-top: 4px solid var(--warn-strong); }
+.drawer-head.drawer-status-full   { border-top: 4px solid var(--full-strong); }
 .drawer-head.drawer-status-ok     { border-top: 4px solid var(--ok-strong); }
 .drawer-title { min-width: 0; }
 .drawer-title h2 {
@@ -1937,6 +2094,7 @@ body.drawer-open .drawer {
   white-space: nowrap;
 }
 .drawer-stat-value.is-warn   { color: var(--warn); }
+.drawer-stat-value.is-full   { color: var(--full); }
 .drawer-stat-value.is-danger { color: var(--danger); }
 .drawer-stat-value.is-ok     { color: var(--ok); }
 .drawer-stat-value .usage-bar { width: 56px; }
@@ -2390,7 +2548,7 @@ table.contract-table tbody tr.link-target:hover { background: #DCE7FB; }
   .app-bar-nav { gap: 0; }
   .app-bar-meta { display: none; }
   .project-hero h1 { font-size: 22px; }
-  .panel-tools { margin-left: 0; width: 100%; }
+  .panel-tools { margin-left: 0; width: 100%; flex-wrap: wrap; }
   .panel-tools .toolbar-search { flex: 1 1 auto; }
   .source-audit-head,
   .month-group-head { align-items: flex-start; flex-direction: column; }
@@ -2530,4 +2688,237 @@ table.contract-table tbody tr.link-target:hover { background: #DCE7FB; }
 
   .link-button,
   .link-indicator { min-height: 36px; padding: 6px 10px; }
+}
+
+/* ─── App-bar stripe toggle ─────────────────────────────────────────────────
+   Opens the slide-in project sidebar. Sits in the left corner, before the
+   brand mark, on both the register and detail pages. */
+.nav-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  margin-left: -6px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background 140ms var(--ease-out), color 140ms var(--ease-out), border-color 140ms var(--ease-out);
+}
+.nav-toggle svg { width: 20px; height: 20px; }
+.nav-toggle:hover { color: var(--ink); background: var(--surface-hov); }
+.nav-toggle:focus-visible {
+  outline: none;
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+body.nav-open .nav-toggle { color: var(--accent); background: var(--accent-soft); }
+
+/* ─── Detail page back link ─────────────────────────────────────────────────
+   Leading arrow in the breadcrumb to return to the project list. */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px 4px 6px;
+  color: var(--muted) !important;
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  transition: color 140ms var(--ease-out), border-color 140ms var(--ease-out), background 140ms var(--ease-out);
+}
+.back-link svg { width: 15px; height: 15px; }
+.back-link:hover {
+  color: var(--accent) !important;
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  text-decoration: none;
+}
+.back-link:focus-visible {
+  outline: none;
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+/* ─── Project sidebar (slide-in) ────────────────────────────────────────────
+   Compact, searchable list of every project. Secondary navigation — drawer
+   pattern, dismissible via backdrop, close button, or Escape. */
+/* freeze the page behind the open sidebar so wheel/touch scroll only moves the
+   sidebar list, never the page underneath */
+body.nav-open { overflow: hidden; }
+
+.nav-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1090;
+  background: rgba(16, 24, 40, 0.46);
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+body.nav-open .nav-backdrop {
+  display: block;
+  animation: fade-in 200ms var(--ease-out);
+}
+
+.proj-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  width: min(340px, 86vw);
+  height: 100dvh;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition: transform 240ms var(--ease-out), visibility 0s linear 240ms;
+}
+body.nav-open .proj-nav {
+  transform: none;
+  visibility: visible;
+  transition: transform 240ms var(--ease-out), visibility 0s;
+}
+
+.proj-nav-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 14px 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.proj-nav-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.proj-nav-badge {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-variant-numeric: tabular-nums;
+}
+.proj-nav-close {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color 140ms var(--ease-out), background 140ms var(--ease-out);
+}
+.proj-nav-close svg { width: 16px; height: 16px; }
+.proj-nav-close:hover { color: var(--ink); background: var(--surface-hov); }
+.proj-nav-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.proj-nav-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 14px;
+  padding: 0 12px;
+  height: 40px;
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--muted-2);
+}
+.proj-nav-search:focus-within {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+.proj-nav-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+.proj-nav-search input:focus { outline: none; }
+
+.proj-nav-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.proj-nav-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  color: var(--ink-2) !important;
+  border-left: 2px solid transparent;
+  transition: background 120ms var(--ease-out);
+}
+.proj-nav-item:hover { background: var(--surface-hov); text-decoration: none; }
+.proj-nav-item.is-current {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+.proj-nav-item.is-current .proj-nav-code { color: var(--accent); }
+.proj-nav-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+.proj-nav-code {
+  flex: none;
+  font-weight: 700;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.proj-nav-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.proj-nav-empty {
+  margin: 8px 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proj-nav { transition: none; }
+  body.nav-open .nav-backdrop { animation: none; }
 }
