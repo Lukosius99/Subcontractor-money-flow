@@ -3,18 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Projektai | Mėnesinis pinigų srautas</title>
+  <title>Projektai | Pinigų srautas</title>
   <link rel="preload" href="/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/styles.css?v=20260616-ux1">
-  <script src="/app.js?v=20260616-ux1" defer></script>
+  <link rel="stylesheet" href="/styles.css?v=20260630-engineer-dedupe">
+  <script src="/app.js?v=20260630-engineer-dedupe" defer></script>
+  <script src="/nav.js?v=20260630-engineer-dedupe" defer></script>
 </head>
 <body>
   <header class="app-bar">
+    <button id="navToggle" class="nav-toggle" type="button" aria-label="Atidaryti projektų sąrašą" aria-controls="projectNav" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+    </button>
     <span class="app-bar-brand">
       <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 17v-6"/><path d="M9 17V7"/><path d="M14 17v-4"/><path d="M19 17V9"/></svg>
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="8.8" y="7" width="11" height="3.4" rx="0.5"/><rect x="12.7" y="7" width="3.2" height="10" rx="0.5"/></svg>
       </span>
-      Mėnesinis pinigų srautas
+      Pinigų srautas
     </span>
     <nav class="app-bar-nav">
       <a href="/" class="is-active">Projektai</a>
@@ -47,12 +51,12 @@
     <div class="toolbar" id="filters">
       <label class="toolbar-search" aria-label="Ieškoti projektų">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-        <input id="projectSearch" type="search" autocomplete="off" placeholder="Ieškoti projekto, objekto, atsakingo, inžinieriaus&hellip;">
+        <input id="projectSearch" type="search" autocomplete="off" placeholder="Ieškoti projekto, objekto, skyriaus, inžinieriaus&hellip;">
         <button id="projectSearchClear" class="search-clear" type="button" aria-label="Išvalyti paiešką" hidden>&times;</button>
       </label>
       <label class="filter-control">
-        <span>Atsakingas</span>
-        <select id="responsibleFilter"></select>
+        <span>Skyrius</span>
+        <select id="departmentFilter"></select>
       </label>
       <label class="filter-control">
         <span>Inžinierius</span>
@@ -64,6 +68,7 @@
           <option value="">Visos būsenos</option>
           <option value="Trūksta sutarties">Trūksta sutarties</option>
           <option value="Viršyta riba">Viršyta riba</option>
+          <option value="Įvykdyta">Įvykdyta</option>
           <option value="Pagal planą">Pagal planą</option>
         </select>
       </label>
@@ -100,9 +105,9 @@
             <tr>
               <th style="width:120px"><button class="sort-button" type="button" data-sort="project">Projektas</button></th>
               <th><button class="sort-button" type="button" data-sort="name">Projekto pavadinimas</button></th>
-              <th style="width:180px"><button class="sort-button" type="button" data-sort="responsible">Atsakingas</button></th>
+              <th style="width:180px"><button class="sort-button" type="button" data-sort="department">Skyrius</button></th>
               <th style="width:180px"><button class="sort-button" type="button" data-sort="engineer">Inžinierius</button></th>
-              <th style="width:120px" class="col-money"><button class="sort-button" type="button" data-sort="invoiced">Sąskaitose</button></th>
+              <th style="width:130px" class="col-money"><button class="sort-button" type="button" data-sort="projectValue">Projekto vertė</button></th>
               <th style="width:120px" class="col-money"><button class="sort-button" type="button" data-sort="remaining">Likutis</button></th>
               <th style="width:150px"><button class="sort-button" type="button" data-sort="status">Būsena</button></th>
               <th style="width:92px" class="col-money"><button class="sort-button" type="button" data-sort="warnings">Įspėjimai</button></th>
@@ -117,9 +122,24 @@
   </main>
 
   <footer class="app-footer">
-    <span>Mėnesinis pinigų srautas</span>
+    <span>Pinigų srautas</span>
     <span class="app-footer-sep">&middot;</span>
     <span id="footerImportText">Paskutinis importas: &mdash;</span>
   </footer>
+
+  <nav id="projectNav" class="proj-nav" aria-label="Projektų sąrašas" aria-hidden="true">
+    <div class="proj-nav-head">
+      <span class="proj-nav-title">Projektai <span id="projectNavCount" class="proj-nav-badge"></span></span>
+      <button id="projectNavClose" class="proj-nav-close" type="button" aria-label="Uždaryti sąrašą">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <label class="proj-nav-search" aria-label="Ieškoti projekto">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="projectNavSearch" type="search" autocomplete="off" placeholder="Projektas arba pavadinimas&hellip;">
+    </label>
+    <div id="projectNavList" class="proj-nav-list"></div>
+  </nav>
+  <button id="navBackdrop" class="nav-backdrop" type="button" aria-label="Uždaryti projektų sąrašą" tabindex="-1"></button>
 </body>
 </html>

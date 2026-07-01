@@ -60,7 +60,7 @@ public sealed class MonthlyFlowImportService
                 : null;
             var cleanName = isSmd
                 ? clientName
-                : MonthlyFlowStore.CleanSubcontractorDisplayName(row.SubcontractorName);
+                : SubcontractorNormalizer.CleanSubcontractorDisplayName(row.SubcontractorName);
             var projectCode = isSmd
                 ? MonthlyFlowStore.ProjectCodeForSmdRow(row.ProjectCode, row.ObjectNumber)
                 : row.ProjectCode;

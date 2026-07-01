@@ -12,7 +12,7 @@ const projectRegisterBody = document.querySelector("#projectRegisterBody");
 const projectCount = document.querySelector("#projectCount");
 const projectSearch = document.querySelector("#projectSearch");
 const projectSearchClear = document.querySelector("#projectSearchClear");
-const responsibleFilter = document.querySelector("#responsibleFilter");
+const departmentFilter = document.querySelector("#departmentFilter");
 const engineerFilter = document.querySelector("#engineerFilter");
 const statusFilter = document.querySelector("#statusFilter");
 const warningsFilter = document.querySelector("#warningsFilter");
@@ -38,6 +38,12 @@ function hide(el) { el.hidden = true; }
 function money(value) { return moneyFormatter.format(Number(value ?? 0)); }
 function numberValue(value) { return Number(value ?? 0); }
 
+/* Project-side remaining: project (client) value minus what has been invoiced
+   to the client — mirrors the detail page's Užsakovas "liko" figure. */
+function projectRemaining(project) {
+  return numberValue(project.projectValue) - numberValue(project.clientInvoiced);
+}
+
 function parseProjectObjectCode(value) {
   const cleaned = String(value ?? "").trim();
   const dashIndex = cleaned.lastIndexOf("-");
@@ -59,18 +65,51 @@ function summarizeList(items, max = 1) {
   return `${unique.slice(0, max).join(", ")} +${rest} daugiau`;
 }
 
+function projectDepartments(project) {
+  const objects = project.objects ?? [];
+  return [...new Set(objects.map(o => (o.departmentCode ?? "").trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "lt"));
+}
+
+/* Imported person names are free text, so the same engineer appears with
+   inconsistent spacing/punctuation — e.g. "M.Kiškionytė" vs "M. Kiškionytė".
+   Collapse those differences to one canonical form so variants merge in the
+   column, the filter, and sorting. (Genuine letter-level misspellings are not
+   handled — they are different strings, not spacing noise.) */
+function normalizePersonName(name) {
+  const collapsed = String(name ?? "").replace(/\s+/g, " ").trim();
+  if (!collapsed) return "";
+  // Force exactly one space after an initial's period: "M.Kiškionytė" -> "M. Kiškionytė".
+  return collapsed.replace(/\.\s*/g, ". ").trim();
+}
+
+/* Distinct, normalized engineers across a project, de-duplicated case- and
+   spacing-insensitively while keeping the first-seen display spelling. */
+function projectEngineers(project) {
+  const objects = project.objects ?? [];
+  const names = [project.engineer, ...objects.flatMap(o => o.engineers ?? [])]
+    .map(normalizePersonName)
+    .filter(Boolean);
+  const byKey = new Map();
+  for (const name of names) {
+    const key = name.toLocaleLowerCase("lt");
+    if (!byKey.has(key)) byKey.set(key, name);
+  }
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b, "lt"));
+}
+
 function projectDisplayFields(project) {
   const objects = project.objects ?? [];
-  const responsible = project.responsible
-    || summarizeList(objects.flatMap(o => o.responsibles ?? []));
-  const engineer = project.engineer
-    || summarizeList(objects.flatMap(o => o.engineers ?? []));
+  const departments = projectDepartments(project);
+  const engineers = projectEngineers(project);
 
   return {
     projectName: project.projectName || null,
     objectCount: Number(project.objectCount ?? objects.length ?? 0),
-    responsible: responsible || null,
-    engineer: engineer || null
+    departments,
+    department: departments.length ? departments.join(", ") : null,
+    engineers,
+    engineer: summarizeList(engineers)
   };
 }
 
@@ -98,27 +137,36 @@ function moneyCell(value, label) {
   return td;
 }
 
-function statusClass(status) {
-  if (status === "Trūksta sutarties") return "pill-warn";
-  if (status === "Viršyta riba") return "pill-danger";
-  if (status === "Pasiekta riba" || status === "Artėja prie ribos") return "pill-warn";
-  return "pill-ok";
+/* The project-list status is customer/project-value based. A subcontractor can
+   be fully invoiced while the whole project is still only partly delivered. */
+function projectDisplayStatus(project) {
+  if (project.status === "Viršyta riba") return "Viršyta riba";
+  if (project.status === "Trūksta sutarties") return "Trūksta sutarties";
+  const projectValue = numberValue(project.projectValue);
+  if (projectValue > 0) {
+    const usage = Math.round(numberValue(project.clientInvoiced) / projectValue * 10000) / 100;
+    if (usage > 100) return "Viršyta riba";
+    if (usage >= 100) return "Įvykdyta";
+  }
+  return "Pagal planą";
+}
+
+/* Quiet status tone (colored dot + text, no pill) by displayed status. */
+function statusQuietTone(status) {
+  if (status === "Viršyta riba") return "is-over";
+  if (status === "Įvykdyta") return "is-full";
+  if (status === "Trūksta sutarties") return "is-warn";
+  return "";
 }
 
 function statusCell(project) {
   const td = document.createElement("td");
-  const status = project.status || "Pagal planą";
-  if (status === "Pagal planą") {
-    const quiet = document.createElement("span");
-    quiet.className = "status-quiet";
-    quiet.textContent = "Pagal planą";
-    td.append(quiet);
-    return td;
-  }
-  const pill = document.createElement("span");
-  pill.className = `pill ${statusClass(status)}`;
-  pill.textContent = status;
-  td.append(pill);
+  const status = projectDisplayStatus(project);
+  const tone = statusQuietTone(status);
+  const quiet = document.createElement("span");
+  quiet.className = `status-quiet${tone ? ` ${tone}` : ""}`;
+  quiet.textContent = status;
+  td.append(quiet);
   return td;
 }
 
@@ -157,7 +205,8 @@ function projectRow(project) {
   const tr = document.createElement("tr");
   tr.tabIndex = 0;
   tr.dataset.href = href;
-  if (project.status === "Viršyta riba") tr.classList.add("is-over-limit");
+  const displayStatus = projectDisplayStatus(project);
+  if (displayStatus === "Viršyta riba") tr.classList.add("is-over-limit");
 
   const codeTd = document.createElement("td");
   codeTd.className = "col-code";
@@ -169,30 +218,30 @@ function projectRow(project) {
 
   tr.append(projectNameCell(fields));
 
-  const resTd = textCell(fields.responsible ?? "-");
-  resTd.dataset.label = "Atsakingas";
-  if (!fields.responsible) resTd.style.color = "var(--muted-2)";
-  tr.append(resTd);
+  const depTd = textCell(fields.department ?? "-");
+  depTd.dataset.label = "Skyrius";
+  if (!fields.department) depTd.style.color = "var(--muted-2)";
+  tr.append(depTd);
 
   const engTd = textCell(fields.engineer ?? "-");
   engTd.dataset.label = "Inžinierius";
   if (!fields.engineer) engTd.style.color = "var(--muted-2)";
   tr.append(engTd);
 
-  tr.append(moneyCell(project.amountWithoutVat, "Sąskaitose"));
-  tr.append(moneyCell(project.remaining, "Likutis"));
+  tr.append(moneyCell(project.projectValue, "Projekto vertė"));
+  tr.append(moneyCell(projectRemaining(project), "Likutis"));
 
   const statusTd = statusCell(project);
   statusTd.dataset.label = "Būsena";
   tr.append(statusTd);
 
-  const warnings = numberValue(project.warningsCount) || (project.status !== "Pagal planą" ? 1 : 0);
+  const warnings = numberValue(project.warningsCount);
   const warningTd = document.createElement("td");
   warningTd.className = "col-money warning-count";
   warningTd.dataset.label = "Įspėjimai";
   if (warnings > 0) {
     const badge = document.createElement("span");
-    badge.className = project.status === "Viršyta riba" ? "count-badge" : "count-badge is-warn";
+    badge.className = displayStatus === "Viršyta riba" ? "count-badge" : "count-badge is-warn";
     badge.textContent = String(warnings);
     warningTd.append(badge);
   } else {
@@ -215,12 +264,11 @@ function projectMatchesQuery(project, query) {
   const parentCode = parseProjectObjectCode(project.projectCode).parentProjectCode.toLowerCase();
   if (parentCode.includes(q)) return true;
   if ((project.projectName ?? "").toLowerCase().includes(q)) return true;
-  if ((project.responsible ?? "").toLowerCase().includes(q)) return true;
   if ((project.engineer ?? "").toLowerCase().includes(q)) return true;
 
   for (const obj of project.objects ?? []) {
     if ((obj.objectName ?? "").toLowerCase().includes(q)) return true;
-    if ((obj.responsibles ?? []).some(r => r.toLowerCase().includes(q))) return true;
+    if ((obj.departmentCode ?? "").toLowerCase().includes(q)) return true;
     if ((obj.engineers ?? []).some(e => e.toLowerCase().includes(q))) return true;
   }
 
@@ -228,14 +276,18 @@ function projectMatchesQuery(project, query) {
 }
 
 function projectHasWarning(project) {
-  return numberValue(project.warningsCount) > 0 || project.status !== "Pagal planą";
+  const status = projectDisplayStatus(project);
+  return numberValue(project.warningsCount) > 0 || status === "Viršyta riba" || status === "Trūksta sutarties";
 }
 
 function projectMatchesFilters(project) {
   const fields = projectDisplayFields(project);
-  if (responsibleFilter.value && fields.responsible !== responsibleFilter.value) return false;
-  if (engineerFilter.value && fields.engineer !== engineerFilter.value) return false;
-  if (statusFilter.value && project.status !== statusFilter.value) return false;
+  if (departmentFilter.value && !fields.departments.includes(departmentFilter.value)) return false;
+  if (engineerFilter.value) {
+    const selected = engineerFilter.value.toLocaleLowerCase("lt");
+    if (!fields.engineers.some(e => e.toLocaleLowerCase("lt") === selected)) return false;
+  }
+  if (statusFilter.value && projectDisplayStatus(project) !== statusFilter.value) return false;
   if (warningsFilter.checked && !projectHasWarning(project)) return false;
   return true;
 }
@@ -248,12 +300,12 @@ function projectSortValue(project, key) {
   const fields = projectDisplayFields(project);
   if (key === "project") return sortText(parseProjectObjectCode(project.projectCode).parentProjectCode);
   if (key === "name") return sortText(fields.projectName);
-  if (key === "responsible") return sortText(fields.responsible);
+  if (key === "department") return sortText(fields.department);
   if (key === "engineer") return sortText(fields.engineer);
-  if (key === "invoiced") return numberValue(project.amountWithoutVat);
-  if (key === "remaining") return numberValue(project.remaining);
+  if (key === "projectValue") return numberValue(project.projectValue);
+  if (key === "remaining") return projectRemaining(project);
   if (key === "warnings") return numberValue(project.warningsCount);
-  if (key === "status") return sortText(project.status);
+  if (key === "status") return sortText(projectDisplayStatus(project));
   return "";
 }
 
@@ -297,9 +349,28 @@ function fillFilter(select, label, values) {
   if (values.includes(current)) select.value = current;
 }
 
+function collectDepartmentOptions() {
+  return [...new Set(projectSummaries
+    .flatMap((project) => projectDisplayFields(project).departments))]
+    .sort((a, b) => a.localeCompare(b, "lt", { sensitivity: "base" }));
+}
+
+/* List each individual engineer (not the summarized "+N daugiau" label),
+   de-duplicated case-insensitively so spacing variants collapse to one option. */
+function collectEngineerOptions() {
+  const byKey = new Map();
+  for (const project of projectSummaries) {
+    for (const name of projectDisplayFields(project).engineers) {
+      const key = name.toLocaleLowerCase("lt");
+      if (!byKey.has(key)) byKey.set(key, name);
+    }
+  }
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b, "lt", { sensitivity: "base" }));
+}
+
 function populateFilters() {
-  fillFilter(responsibleFilter, "Visi atsakingi", collectFilterOptions((fields) => fields.responsible));
-  fillFilter(engineerFilter, "Visi inžinieriai", collectFilterOptions((fields) => fields.engineer));
+  fillFilter(departmentFilter, "Visi skyriai", collectDepartmentOptions());
+  fillFilter(engineerFilter, "Visi inžinieriai", collectEngineerOptions());
 }
 
 function setCurrentProjects() {
@@ -325,8 +396,11 @@ function setProjectView(view) {
 
 let firstProjectRender = true;
 
-/* Status overview strip: glanceable risk counts that double as filter shortcuts. */
+/* Status overview strip: glanceable counts that double as filter shortcuts.
+   Mutually exclusive by displayed status, so the counts sum to the total. */
 const STRIP_STATUSES = [
+  { status: "Pagal planą", tone: "ok" },
+  { status: "Įvykdyta", tone: "full" },
   { status: "Viršyta riba", tone: "danger" },
   { status: "Trūksta sutarties", tone: "warn" }
 ];
@@ -359,40 +433,25 @@ function renderStatusStrip() {
   if (projectSummaries.length === 0) { hide(statusStrip); return; }
 
   const counts = new Map(STRIP_STATUSES.map(({ status }) => [status, 0]));
-  let healthy = 0;
   for (const project of projectSummaries) {
-    if (counts.has(project.status)) counts.set(project.status, counts.get(project.status) + 1);
-    if (!projectHasWarning(project)) healthy += 1;
+    const status = projectDisplayStatus(project);
+    if (counts.has(status)) counts.set(status, counts.get(status) + 1);
   }
 
-  const chips = [
-    statusStripChip({
-      label: "Pagal planą",
-      count: healthy,
-      tone: "ok",
-      isActive: statusFilter.value === "Pagal planą",
-      title: "Projektai be įspėjimų",
+  const chips = STRIP_STATUSES
+    .filter(({ status }) => counts.get(status) > 0)
+    .map(({ status, tone }) => statusStripChip({
+      label: status,
+      count: counts.get(status),
+      tone,
+      isActive: statusFilter.value === status,
+      title: `Rodyti tik „${status}“ projektus`,
       onClick: () => {
-        statusFilter.value = statusFilter.value === "Pagal planą" ? "" : "Pagal planą";
+        statusFilter.value = statusFilter.value === status ? "" : status;
         warningsFilter.checked = false;
         renderProjects();
       }
-    }),
-    ...STRIP_STATUSES
-      .filter(({ status }) => counts.get(status) > 0)
-      .map(({ status, tone }) => statusStripChip({
-        label: status,
-        count: counts.get(status),
-        tone,
-        isActive: statusFilter.value === status,
-        title: `Rodyti tik „${status}“ projektus`,
-        onClick: () => {
-          statusFilter.value = statusFilter.value === status ? "" : status;
-          warningsFilter.checked = false;
-          renderProjects();
-        }
-      }))
-  ];
+    }));
 
   statusStrip.replaceChildren(...chips);
   show(statusStrip);
@@ -425,8 +484,9 @@ function renderPageKpis() {
   let projectValue = 0;
   let subcontractorInvoiced = 0;
   for (const project of projectSummaries) {
-    if (project.status === "Viršyta riba") overLimit += 1;
-    if (project.status === "Trūksta sutarties") missingContract += 1;
+    const status = projectDisplayStatus(project);
+    if (status === "Viršyta riba") overLimit += 1;
+    if (status === "Trūksta sutarties") missingContract += 1;
     projectValue += numberValue(project.projectValue);
     subcontractorInvoiced += numberValue(project.amountWithoutVat);
   }
@@ -543,7 +603,7 @@ projectSearchClear.addEventListener("click", () => {
   projectSearch.focus();
   renderProjects();
 });
-[responsibleFilter, engineerFilter, statusFilter, warningsFilter].forEach((control) => {
+[departmentFilter, engineerFilter, statusFilter, warningsFilter].forEach((control) => {
   control.addEventListener("change", renderProjects);
 });
 document.querySelectorAll(".sort-button").forEach((button) => {
