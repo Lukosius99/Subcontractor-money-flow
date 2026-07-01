@@ -40,6 +40,7 @@ const projectMeta = document.querySelector("#projectMeta");
 const latestImportMeta = document.querySelector("#latestImportMeta");
 const latestImportText = document.querySelector("#latestImportText");
 const totalsScopeNote = document.querySelector("#totalsScopeNote");
+const subPanelSub = document.querySelector("#subPanelSub");
 const kpiCards = document.querySelector("#kpiCards");
 const objectScope = document.querySelector("#objectScope");
 const objectScopeCards = document.querySelector("#objectScopeCards");
@@ -49,7 +50,7 @@ const subSearch = document.querySelector("#subSearch");
 const subSearchClear = document.querySelector("#subSearchClear");
 const toggleMonthsButton = document.querySelector("#toggleMonths");
 const toggleEditButton = document.querySelector("#toggleEdit");
-const exportCsvButton = document.querySelector("#exportCsv");
+const exportExcelButton = document.querySelector("#exportExcel");
 const contractTableHead = document.querySelector("#contractTableHead");
 const contractTableBody = document.querySelector("#contractTableBody");
 const contractTableFoot = document.querySelector("#contractTableFoot");
@@ -58,9 +59,6 @@ const objectValueSummary = document.querySelector("#objectValueSummary");
 const objectValueContent = document.querySelector("#objectValueContent");
 const importedRowsSummary = document.querySelector("#importedRowsSummary");
 const importedRowsContent = document.querySelector("#importedRowsContent");
-const exceptionsBadge = document.querySelector("#exceptionsBadge");
-const exceptionsSummary = document.querySelector("#exceptionsSummary");
-const exceptionsContent = document.querySelector("#exceptionsContent");
 const drawer = document.querySelector("#drawer");
 const drawerBackdrop = document.querySelector("#drawerBackdrop");
 
@@ -120,7 +118,7 @@ toggleMonthsButton?.addEventListener("click", () => setShowMonths(!showMonths));
 
 toggleEditButton?.addEventListener("click", () => setEditMode(!editMode));
 
-exportCsvButton?.addEventListener("click", exportCsv);
+exportExcelButton?.addEventListener("click", exportExcel);
 
 function setShowMonths(value) {
   showMonths = Boolean(value);
@@ -150,11 +148,13 @@ async function assignObject(summary, rawTarget) {
     renderCurrentContractTable();
     return;
   }
-  const confirmed = window.confirm(
-    `Perkelti „${summary.name}" sąskaitas iš objekto ${summary.projectObjectNumber || "—"} į ${target}?\n\n`
-    + `Tai pataiso klaidingą objekto numerį iš pirminio failo. Sąskaitos bus rodomos `
-    + `objekte ${target}, kad galėtumėte jas susieti su sutartimi. Galėsite atšaukti vėliau.`
-  );
+  const confirmed = await confirmDialog({
+    title: "Perkelti sąskaitas?",
+    subject: summary.name,
+    transfer: { from: summary.projectObjectNumber || "—", to: target },
+    note: "Pataiso klaidingą objekto numerį. Galima atšaukti vėliau.",
+    confirmLabel: "Perkelti"
+  });
   if (!confirmed) {
     renderCurrentContractTable();
     return;
@@ -175,15 +175,18 @@ async function assignObject(summary, rawTarget) {
     }
     await loadProject();
   } catch (exception) {
-    window.alert(`Nepavyko perkelti: ${exception.message}`);
+    await alertDialog("Nepavyko perkelti", exception.message);
     renderCurrentContractTable();
   }
 }
 
 async function removeObjectAssignment(assignment) {
-  const confirmed = window.confirm(
-    `Atšaukti objekto pakeitimą „${assignment.subcontractorName}" (${assignment.sourceObjectNumber} → ${assignment.targetObjectNumber})?`
-  );
+  const confirmed = await confirmDialog({
+    title: "Grąžinti pradinį objektą?",
+    subject: assignment.subcontractorName,
+    transfer: { from: assignment.targetObjectNumber, to: assignment.sourceObjectNumber },
+    confirmLabel: "Grąžinti"
+  });
   if (!confirmed) return;
   try {
     const response = await fetch(
@@ -193,7 +196,7 @@ async function removeObjectAssignment(assignment) {
     if (!response.ok) throw new Error(`Užklausa nepavyko (${response.status}).`);
     await loadProject();
   } catch (exception) {
-    window.alert(`Nepavyko atšaukti: ${exception.message}`);
+    await alertDialog("Nepavyko grąžinti", exception.message);
   }
 }
 
@@ -215,6 +218,121 @@ function svgIcon(paths, viewBox = "0 0 24 24") {
   svg.setAttribute("aria-hidden", "true");
   svg.innerHTML = paths;
   return svg;
+}
+
+/* ─── Modal dialog (replaces native confirm / alert) ─────────────────────── */
+/* A custom dialog so confirmations look like the app, not the browser chrome:
+   concise title, an optional from→to visual, one short line of context, and a
+   clear primary action. Returns a Promise<boolean> (true = confirmed). */
+let activeModalCleanup = null;
+
+function openModal({ title, subject, transfer, message, note, confirmLabel, cancelLabel = "Atšaukti", tone = "default", confirmOnly = false }) {
+  return new Promise((resolve) => {
+    if (activeModalCleanup) activeModalCleanup();
+    const lastFocused = document.activeElement;
+
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop";
+    const modal = document.createElement("div");
+    modal.className = "modal";
+    modal.setAttribute("role", confirmOnly ? "alertdialog" : "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-labelledby", "modalTitle");
+
+    const heading = document.createElement("h3");
+    heading.className = "modal-title";
+    heading.id = "modalTitle";
+    heading.textContent = title;
+    modal.append(heading);
+
+    if (subject) {
+      const subjectEl = document.createElement("p");
+      subjectEl.className = "modal-subject";
+      subjectEl.textContent = subject;
+      modal.append(subjectEl);
+    }
+    if (transfer) {
+      const row = document.createElement("div");
+      row.className = "modal-transfer";
+      const from = document.createElement("span");
+      from.className = "modal-chip";
+      from.textContent = transfer.from;
+      const arrow = svgIcon('<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>');
+      arrow.classList.add("modal-transfer-arrow");
+      const to = document.createElement("span");
+      to.className = "modal-chip is-target";
+      to.textContent = transfer.to;
+      row.append(from, arrow, to);
+      modal.append(row);
+    }
+    if (message) {
+      const messageEl = document.createElement("p");
+      messageEl.className = "modal-message";
+      messageEl.textContent = message;
+      modal.append(messageEl);
+    }
+    if (note) {
+      const noteEl = document.createElement("p");
+      noteEl.className = "modal-note";
+      noteEl.textContent = note;
+      modal.append(noteEl);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "modal-actions";
+    const settle = (result) => { if (activeModalCleanup) activeModalCleanup(); resolve(result); };
+
+    if (!confirmOnly) {
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "btn";
+      cancelBtn.textContent = cancelLabel;
+      cancelBtn.addEventListener("click", () => settle(false));
+      actions.append(cancelBtn);
+    }
+    const confirmBtn = document.createElement("button");
+    confirmBtn.type = "button";
+    confirmBtn.className = `btn ${tone === "danger" ? "btn-danger" : "btn-primary"}`;
+    confirmBtn.textContent = confirmLabel;
+    confirmBtn.addEventListener("click", () => settle(true));
+    actions.append(confirmBtn);
+    modal.append(actions);
+
+    backdrop.append(modal);
+    document.body.append(backdrop);
+
+    const onKey = (event) => {
+      if (event.key === "Escape") { event.preventDefault(); settle(false); }
+      else if (event.key === "Tab") {
+        const focusable = [...modal.querySelectorAll("button")];
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    };
+    backdrop.addEventListener("mousedown", (event) => { if (event.target === backdrop) settle(false); });
+    document.addEventListener("keydown", onKey, true);
+
+    activeModalCleanup = () => {
+      document.removeEventListener("keydown", onKey, true);
+      backdrop.classList.add("is-closing");
+      const remove = () => backdrop.remove();
+      backdrop.addEventListener("animationend", remove, { once: true });
+      setTimeout(remove, 250);
+      activeModalCleanup = null;
+      if (lastFocused && typeof lastFocused.focus === "function") lastFocused.focus();
+    };
+
+    confirmBtn.focus();
+    requestAnimationFrame(() => confirmBtn.focus());
+  });
+}
+
+function confirmDialog(options) { return openModal(options); }
+function alertDialog(title, message) {
+  return openModal({ title, message, confirmLabel: "Gerai", confirmOnly: true, tone: "danger" });
 }
 
 const ICONS = {
@@ -302,6 +420,48 @@ function parseProjectObjectCode(value) {
   };
 }
 
+/* The object list backing the scope cards and the "N objektai" count.
+   Two corrections over the raw backend list (which is built from raw imports):
+   1. Drop the bare parent-code line some SMD imports book project-level
+      invoices against (e.g. "P1677" instead of "P1677-01") — not a real object.
+   2. Fold objects emptied by edit-mode reassignment into their target. The
+      backend still summarises the old object number, so after the user fixes a
+      mistyped code the stale source card lingers; merge its amounts into the
+      corrected object and drop it so the cards auto-adjust. */
+function projectObjects() {
+  const parentCode = String(projectDetail?.parentProjectCode || currentProjectCode || "").toLowerCase();
+  const objects = (projectDetail?.objects ?? [])
+    .filter((object) => String(object.objectNumber ?? "").toLowerCase() !== parentCode)
+    .map((object) => ({ ...object }));
+
+  /* Only fold when all objects are loaded, so "no rows point at this object"
+     reliably means the source is empty (a single-object view loads just its
+     own rows). */
+  const assignments = projectDetail?.objectAssignments ?? [];
+  if (assignments.length === 0 || projectDetail?.isAllObjects === false) return objects;
+
+  const objectsWithRows = new Set((projectDetail?.contractRows ?? [])
+    .map((row) => String(row.projectObjectNumber ?? row.objectNumber ?? "").toLowerCase()));
+  const byKey = new Map(objects.map((object) => [String(object.objectNumber ?? "").toLowerCase(), object]));
+  const folded = new Set();
+  for (const assignment of assignments) {
+    const sourceKey = String(assignment.sourceObjectNumber ?? "").toLowerCase();
+    const targetKey = String(assignment.targetObjectNumber ?? "").toLowerCase();
+    if (sourceKey === targetKey || folded.has(sourceKey) || objectsWithRows.has(sourceKey)) continue;
+    const source = byKey.get(sourceKey);
+    const target = byKey.get(targetKey);
+    if (!source || !target) continue;
+    target.contractedAmount = numberValue(target.contractedAmount) + numberValue(source.contractedAmount);
+    target.amountWithoutVat = numberValue(target.amountWithoutVat) + numberValue(source.amountWithoutVat);
+    target.remaining = numberValue(target.contractedAmount) - numberValue(target.amountWithoutVat);
+    target.status = deriveStatus(target.contractedAmount, target.amountWithoutVat);
+    folded.add(sourceKey);
+  }
+  return folded.size === 0
+    ? objects
+    : objects.filter((object) => !folded.has(String(object.objectNumber ?? "").toLowerCase()));
+}
+
 function uniqueValues(values) {
   return [...new Set(values
     .map((v) => typeof v === "string" ? v.trim() : "")
@@ -332,6 +492,34 @@ function renderProjectMeta() {
   if (engineers.length > 0) fields.push(...metaField("Inžinierius", summarizeValues(engineers, "-")));
   projectMeta.append(...fields);
   projectMeta.hidden = fields.length === 0;
+  renderSubPanelScope();
+}
+
+/* Lead the subcontractor panel with its scope so single-object projects —
+   which drop the "Objektas" column — still state which object they cover. */
+function renderSubPanelScope() {
+  if (!subPanelSub) return;
+  const objects = projectObjects();
+  let scope;
+  if (selectedObjectNumber) {
+    const match = objects.find((o) =>
+      String(o.objectNumber).toLowerCase() === selectedObjectNumber.toLowerCase());
+    scope = [`Objektas ${selectedObjectNumber}`, match?.departmentCode].filter(Boolean).join(" · ");
+  } else if (objects.length === 1) {
+    scope = [`Objektas ${objects[0].objectNumber}`, objects[0].departmentCode].filter(Boolean).join(" · ");
+  } else if (objects.length > 1) {
+    scope = `Visi objektai · ${objects.length} objekt${objects.length === 1 ? "as" : "ai"}`;
+  }
+
+  const hint = "Sutartys susietos su mėnesinėmis sąskaitomis, EUR be PVM. Spustelėkite eilutę, kad pamatytumėte detales.";
+  subPanelSub.replaceChildren();
+  if (scope) {
+    const strong = document.createElement("strong");
+    strong.textContent = scope;
+    subPanelSub.append(strong, ` · ${hint}`);
+  } else {
+    subPanelSub.append(hint);
+  }
 }
 
 function monthKey(group) {
@@ -349,19 +537,42 @@ function periodRange(keys) {
   return `${monthLabel(keys[0])} – ${monthLabel(keys[keys.length - 1])}`;
 }
 
-/* A row needs review only when it is actually over its contracted amount
-   (remaining < 0). Being at or near 100% with money still left is on track.
-   Missing-contract rows (invoices but no contract) are over by definition. */
+/* Three usage states, chosen for traffic-light + milestone psychology:
+   under 100% is safe (green), exactly 100% is a neutral "budget complete"
+   milestone (navy — calm, not alarming), over 100% is danger (red). The
+   percentage is rounded to 2 decimals first so the status matches the figure
+   shown in the UI (100.004% displays as 100.00% → "Išnaudota", not over).
+   Missing-contract rows (invoices but no contract) can't be compared, so they
+   keep a distinct amber "needs attention" state. */
 function deriveStatus(contracted, invoiced) {
-  if (numberValue(contracted) <= 0) return numberValue(invoiced) > 0 ? "Trūksta sutarties" : "Pagal planą";
-  return numberValue(invoiced) > numberValue(contracted) ? "Viršyta riba" : "Pagal planą";
+  const contractedAmount = numberValue(contracted);
+  const invoicedAmount = numberValue(invoiced);
+  if (contractedAmount <= 0) return invoicedAmount > 0 ? "Trūksta sutarties" : "Pagal planą";
+  const usage = Math.round((invoicedAmount / contractedAmount) * 10000) / 100;
+  if (usage > 100) return "Viršyta riba";   // > 100.00% — over budget (red)
+  if (usage >= 100) return "Išnaudota";     // exactly 100.00% — no remaining (navy)
+  return "Pagal planą";                     // < 100% — safe (green)
+}
+
+/* Usage→color band for bars not tied to a status label (e.g. the Užsakovas
+   client bar). Same thresholds and rounding as deriveStatus. */
+function usageKind(percent) {
+  const rounded = Math.round(numberValue(percent) * 100) / 100;
+  if (rounded > 100) return "over";
+  if (rounded >= 100) return "full";
+  return "ok";
+}
+
+/* The red "Reikia peržiūrėti" attention count flags genuine problems only:
+   over budget or invoices with no contract. */
+function statusNeedsReview(status) {
+  return status === "Viršyta riba" || status === "Trūksta sutarties";
 }
 
 function statusClass(status) {
-  if (status === "Trūksta sutarties") return { label: "Trūksta sutarties", className: "warn", pill: "pill-warn", usage: "warn", rank: 3 };
-  if (status === "Viršyta riba") return { label: "Viršyta riba", className: "over", pill: "pill-danger", usage: "over", rank: 4 };
-  if (status === "Pasiekta riba") return { label: "Pasiekta riba", className: "warn", pill: "pill-danger", usage: "over", rank: 2 };
-  if (status === "Artėja prie ribos") return { label: "Artėja prie ribos", className: "warn", pill: "pill-warn", usage: "warn", rank: 1 };
+  if (status === "Trūksta sutarties") return { label: "Trūksta sutarties", className: "missing", pill: "pill-warn", usage: "warn", rank: 4 };
+  if (status === "Viršyta riba")      return { label: "Viršyta riba", className: "over", pill: "pill-danger", usage: "over", rank: 5 };
+  if (status === "Išnaudota" || status === "Pasiekta riba") return { label: "Įvykdyta", className: "full", pill: "pill-full", usage: "full", rank: 3 };
   return { label: "Pagal planą", className: "ok", pill: "pill-ok", usage: "ok", rank: 0 };
 }
 
@@ -457,6 +668,7 @@ function canStartLink(summary) {
 function isEligibleLinkTarget(summary) {
   return Boolean(linkSource)
     && !summary.isImportedOnly
+    && !summary.isClientRow
     && Boolean(summary.rowKey)
     && summary.projectObjectNumber.toLowerCase() === linkSource.projectObjectNumber.toLowerCase();
 }
@@ -512,12 +724,13 @@ function updateLinkingVisuals() {
 async function completeLink(targetSummary) {
   const source = linkSource;
   if (!source || !isEligibleLinkTarget(targetSummary)) return;
-  const confirmed = window.confirm(
-    `Susieti „${source.name}“ su „${targetSummary.name}“ objekte ${targetSummary.projectObjectNumber}?\n\n`
-    + `Naudokite tai, kai abu pavadinimai reiškia tą patį subrangovą, bet vienas įrašytas kitaip. `
-    + `Sąskaitos, importuotos kaip „${source.name}“, nuo šiol bus skaičiuojamos prie „${targetSummary.name}“, `
-    + `o būsimi importai bus susiejami automatiškai. Tai galėsite atšaukti vėliau Susiejimo stulpelyje.`
-  );
+  const confirmed = await confirmDialog({
+    title: "Susieti subrangovą?",
+    transfer: { from: source.name, to: targetSummary.name },
+    message: `Objektas ${targetSummary.projectObjectNumber}`,
+    note: "Sąskaitos bus skaičiuojamos kartu; būsimi importai susiejami automatiškai. Galima atšaukti.",
+    confirmLabel: "Susieti"
+  });
   cancelLinking();
   if (!confirmed) return;
   try {
@@ -536,12 +749,17 @@ async function completeLink(targetSummary) {
     }
     await loadProject();
   } catch (exception) {
-    window.alert(`Nepavyko susieti eilučių: ${exception.message}`);
+    await alertDialog("Nepavyko susieti", exception.message);
   }
 }
 
 async function removeLink(link) {
-  const confirmed = window.confirm(`Atsieti „${link.sourceName}“ sąskaitas nuo sutarties „${link.targetName}“?`);
+  const confirmed = await confirmDialog({
+    title: "Atsieti sąskaitas?",
+    transfer: { from: link.sourceName, to: link.targetName },
+    confirmLabel: "Atsieti",
+    tone: "danger"
+  });
   if (!confirmed) return;
   try {
     const response = await fetch(
@@ -551,7 +769,7 @@ async function removeLink(link) {
     if (!response.ok) throw new Error(`Unlink request failed with status ${response.status}.`);
     await loadProject();
   } catch (exception) {
-    window.alert(`Nepavyko atsieti eilučių: ${exception.message}`);
+    await alertDialog("Nepavyko atsieti", exception.message);
   }
 }
 
@@ -561,7 +779,7 @@ function scopeTotals(rows) {
   const totals = rows.reduce((acc, row) => {
     acc.contracted += row.contracted;
     acc.invoiced += row.invoiced;
-    if (row.warning || row.status !== "Pagal planą") acc.warnings += 1;
+    if (row.warning || statusNeedsReview(row.status)) acc.warnings += 1;
     return acc;
   }, { contracted: 0, invoiced: 0, warnings: 0 });
   totals.remaining = totals.contracted - totals.invoiced;
@@ -683,8 +901,7 @@ function renderKpis() {
   const hasClientData = projectValue > 0 || clientInvoiced > 0;
   const clientRemaining = projectValue - clientInvoiced;
   const clientUsage = projectValue > 0 ? clientInvoiced / projectValue * 100 : 0;
-  const clientUsageKind = projectValue <= 0
-    ? "" : clientInvoiced > projectValue ? "over" : clientUsage >= 90 ? "warn" : "ok";
+  const clientUsageKind = projectValue <= 0 ? "" : usageKind(clientUsage);
 
   const animatedFills = [];
 
@@ -696,26 +913,28 @@ function renderKpis() {
   );
   animatedFills.push(subUsage.fill);
 
+  /* Subrangovų suma iki laikotarpio mirrors the Užsakovas invoiced cell: a
+     colored usage bar + percent rather than plain "% nuo sutarto" text. */
+  const subInvoicedUsage = hasContract && totals.invoiced !== 0
+    ? kpiUsageMeta(totals.usage, status.usage, `${percentFormatter.format(totals.usage)}%`)
+    : null;
+  if (subInvoicedUsage) animatedFills.push(subInvoicedUsage.fill);
+
   const subCells = [
     totalsCell({
-      label: "Sutarta", value: hasContract ? money(totals.contracted) : "—",
+      label: "Subrangovų sutartinė suma", value: hasContract ? money(totals.contracted) : "—",
       unit: hasContract ? "€" : undefined,
       tone: hasContract ? undefined : "quiet",
-      meta: hasContract ? null : totalsMetaText("Nėra subrangų sutarčių")
+      meta: !hasContract
+        ? totalsMetaText("Nėra subrangų sutarčių")
+        : totals.remaining < 0
+          ? totalsMetaText(`Viršyta ${money(Math.abs(totals.remaining))} €`, "danger")
+          : totalsMetaText(`liko ${money(totals.remaining)} €`)
     }),
     totalsCell({
-      label: "Sąskaitose", value: money(totals.invoiced), unit: "€",
+      label: "Subrangovų suma iki laikotarpio", value: money(totals.invoiced), unit: "€",
       tone: totals.invoiced === 0 ? "quiet" : undefined,
-      meta: hasContract && totals.invoiced !== 0
-        ? totalsMetaText(`${percentFormatter.format(totals.usage)}% nuo sutarto`)
-        : null
-    }),
-    totalsCell({
-      label: "Likutis", value: money(totals.remaining), unit: "€",
-      tone: totals.remaining < 0 ? "danger" : undefined,
-      meta: totals.remaining < 0
-        ? totalsMetaText(`Viršyta ${money(Math.abs(totals.remaining))} €`, "danger")
-        : (hasContract ? totalsMetaText(`liko ${money(totals.remaining)} €`) : null)
+      meta: subInvoicedUsage ? subInvoicedUsage.meta : null
     }),
     totalsCell({
       label: "Panaudota",
@@ -756,7 +975,7 @@ function renderKpis() {
           : totalsMetaText("Projekto vertė neimportuota")
       }),
       totalsCell({
-        label: "Klientui sąskaitose",
+        label: "Užsakovo suma iki laikotarpio",
         value: money(clientInvoiced), unit: "€",
         tone: clientInvoiced === 0 ? "quiet" : undefined,
         meta: clientInvoicedMeta
@@ -789,13 +1008,13 @@ function renderKpis() {
 
 /* ─── Needs-attention strip ───────────────────────────────────────────── */
 /* One calm line summarizing what needs review; hidden when everything is
-   on track. Derived from the same rows the table and exceptions use. */
+   on track. Derived from the same rows the table uses. */
 
 function renderAttentionStrip() {
   const strip = document.querySelector("#attentionStrip");
   if (!strip) return;
 
-  const issues = baseContractRows.filter((row) => row.warning || row.status !== "Pagal planą");
+  const issues = baseContractRows.filter((row) => row.warning || statusNeedsReview(row.status));
   if (issues.length === 0) { hide(strip); return; }
 
   const overAmount = baseContractRows
@@ -838,34 +1057,23 @@ function renderAttentionStrip() {
     strip.append(part);
   });
 
-  const review = document.createElement("button");
-  review.type = "button";
-  review.className = "btn-link";
-  review.textContent = "Peržiūrėti išimtis";
-  review.addEventListener("click", () => {
-    const section = document.querySelector("#exceptionsSection");
-    if (section) {
-      section.open = true;
-      section.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  });
-  strip.append(review);
   show(strip);
 }
 
 /* ─── Object scope cards ──────────────────────────────────────────────── */
 
 function scopeStatusModifier(summary, contracted) {
+  if (summary.status === "Trūksta sutarties") return "status-warn";
   if (contracted <= 0) return "status-neutral";
   if (summary.status === "Viršyta riba") return "status-danger";
-  if (summary.status === "Pasiekta riba" || summary.status === "Artėja prie ribos") return "status-warn";
-  if (summary.status === "Trūksta sutarties") return "status-neutral";
+  if (summary.status === "Išnaudota" || summary.status === "Pasiekta riba") return "status-full";
   return "";
 }
 
 function scopeUsageClass(status) {
   if (status === "Viršyta riba") return "over";
-  if (status === "Pasiekta riba" || status === "Artėja prie ribos" || status === "Trūksta sutarties") return "warn";
+  if (status === "Išnaudota" || status === "Pasiekta riba") return "full";
+  if (status === "Trūksta sutarties") return "warn";
   return "ok";
 }
 
@@ -913,7 +1121,9 @@ function scopeCard({ title, sub, href, icon, summary, isSelected }) {
 
   const contracted = numberValue(summary.contractedAmount);
   const invoiced = numberValue(summary.amountWithoutVat);
-  const usage = contracted > 0 ? invoiced / contracted * 100 : 0;
+  const projectValue = numberValue(summary.projectValue);
+  const clientInvoiced = numberValue(summary.clientInvoiced);
+  const usage = projectValue > 0 ? clientInvoiced / projectValue * 100 : 0;
 
   /* invoices without any contracted amount: flag it instead of showing a
      confusing "0 contracted" next to real invoiced money */
@@ -955,41 +1165,41 @@ function scopeCard({ title, sub, href, icon, summary, isSelected }) {
   usageWrap.className = "usage";
   const usageBar = document.createElement("div");
   usageBar.className = "usage-bar";
-  const usageClass = scopeUsageClass(summary.status);
+  const usageClass = projectValue > 0 ? usageKind(usage) : "";
   const usageFill = document.createElement("span");
-  usageFill.className = `usage-fill ${contracted > 0 ? usageClass : ""}`.trim();
-  usageFill.style.width = `${contracted > 0 ? Math.min(Math.max(usage, 0), 100) : 0}%`;
+  usageFill.className = `usage-fill ${usageClass}`.trim();
+  usageFill.style.width = `${projectValue > 0 ? Math.min(Math.max(usage, 0), 100) : 0}%`;
   usageBar.append(usageFill);
   const usageNum = document.createElement("span");
   usageNum.className = "usage-num";
-  if (contracted > 0 && usageClass === "warn") usageNum.classList.add("warn");
-  if (contracted > 0 && usageClass === "over") usageNum.classList.add("over");
-  usageNum.textContent = contracted > 0 ? `${percentFormatter.format(usage)}%` : "—";
+  if (projectValue > 0 && usageClass === "warn") usageNum.classList.add("warn");
+  if (projectValue > 0 && usageClass === "full") usageNum.classList.add("full");
+  if (projectValue > 0 && usageClass === "over") usageNum.classList.add("over");
+  usageNum.textContent = projectValue > 0 ? `${percentFormatter.format(usage)}%` : "—";
   usageWrap.append(usageBar, usageNum);
   usageStat.append(usageLabel, usageWrap);
   stats.append(usageStat);
-  if (contracted > 0) animateFill(usageFill);
+  if (projectValue > 0) animateFill(usageFill);
 
   card.append(stats);
   return card;
 }
 
 function renderObjectScope() {
-  const objects = projectDetail.objects ?? [];
+  const objects = projectObjects();
   if (objects.length <= 1) { hide(objectScope); return; }
 
   const parentProjectCode = projectDetail.parentProjectCode || currentProjectCode;
   const allSummary = objects.reduce((acc, item) => {
     acc.contractedAmount += numberValue(item.contractedAmount);
     acc.amountWithoutVat += numberValue(item.amountWithoutVat);
+    acc.projectValue += numberValue(item.projectValue);
+    acc.clientInvoiced += numberValue(item.clientInvoiced);
     acc.remaining += numberValue(item.remaining);
-    if (item.status === "Viršyta riba") acc.status = "Viršyta riba";
-    else if (acc.status !== "Viršyta riba" && item.status === "Trūksta sutarties") acc.status = "Trūksta sutarties";
-    else if (!["Viršyta riba", "Trūksta sutarties"].includes(acc.status) && (item.status === "Artėja prie ribos" || item.status === "Pasiekta riba")) {
-      acc.status = item.status;
-    }
+    /* the All-objects card carries the most severe object status */
+    if (statusClass(item.status).rank > statusClass(acc.status).rank) acc.status = item.status;
     return acc;
-  }, { contractedAmount: 0, amountWithoutVat: 0, remaining: 0, status: "Pagal planą" });
+  }, { contractedAmount: 0, amountWithoutVat: 0, projectValue: 0, clientInvoiced: 0, remaining: 0, status: "Pagal planą" });
 
   const cards = [
     scopeCard({
@@ -1057,13 +1267,13 @@ function headerButton(text, key, className, help) {
 
 function tableColumns(monthKeys) {
   return [
-    ...(isAllObjectsView ? [{ text: "Objektas", key: "object", cls: "" }] : []),
+    { text: "Objektas", key: "object", cls: "" },
     { text: "Padalinys", key: "department", cls: "" },
     { text: "Subrangovas", key: "name", cls: "" },
-    { text: "Sutarta €", key: "contracted", cls: "col-money col-sep" },
-    { text: "Sąskaitose €", key: "invoiced", cls: "col-money" },
+    { text: "Sutartinė suma (€)", key: "contracted", cls: "col-money col-sep" },
+    { text: "Suma iki laikotarpio (€)", key: "invoiced", cls: "col-money" },
     { text: "Likutis €", key: "remaining", cls: "col-money" },
-    { text: "Panaudota", key: "usage", cls: "col-money" },
+    { text: "Baigtumas %", key: "usage", cls: "col-money" },
     { text: "Būsena", key: "status", cls: "col-sep" },
     { text: "Paskutinė sąskaita", key: "lastInvoice", cls: "" },
     { text: "Susiejimas", key: "", cls: "", help: "Susiekite subrangovą, kurio importuotas pavadinimas automatiškai neatitiko sutarties — dažniausiai dėl pavadinimo rašybos klaidos." },
@@ -1088,7 +1298,7 @@ function createUsageCell(usage, status) {
   wrap.className = "usage";
 
   const num = document.createElement("span");
-  num.className = `usage-num ${status.usage === "over" ? "over" : status.usage === "warn" ? "warn" : ""}`;
+  num.className = `usage-num ${status.usage === "ok" ? "" : status.usage}`.trim();
   num.textContent = status.label === "Trūksta sutarties" ? "-" : `${percentFormatter.format(usage)}%`;
 
   const bar = document.createElement("span");
@@ -1203,7 +1413,7 @@ function appendObjectCell(tr, summary) {
   const cell = document.createElement("td");
   cell.className = "col-code";
 
-  if (editMode && isEditableObjectRow(summary)) {
+  if (isAllObjectsView && editMode && isEditableObjectRow(summary)) {
     const input = document.createElement("input");
     input.type = "text";
     input.className = "object-edit-input";
@@ -1275,9 +1485,13 @@ function updateEditBar() {
 
 function renderContractTable(contractRows, monthKeys) {
   renderTableHead(monthKeys);
-  const departmentRows = buildDepartmentSummaryRows(monthKeys);
+  /* The pinned Užsakovas (client) rows are project-level context, not search
+     hits — while a subcontractor search is active, drop them so only matching
+     subcontractor rows show. */
+  const departmentRows = searchTerm ? [] : buildDepartmentSummaryRows(monthKeys);
   const bodyRows = [];
   renderedContractRows = [];
+  for (const entry of departmentRows) renderedContractRows.push(entry);
 
   const tableWrap = contractTableBody.closest("table")?.parentElement;
   const panel = tableWrap?.closest(".panel");
@@ -1297,9 +1511,7 @@ function renderContractTable(contractRows, monthKeys) {
     if (selectedSummaryKey && summaryKey(summary) === selectedSummaryKey) tr.classList.add("is-selected");
     renderedContractRows.push({ tr, summary });
 
-    if (isAllObjectsView) {
-      appendObjectCell(tr, summary);
-    }
+    appendObjectCell(tr, summary);
 
     appendTextCell(tr, summary.departmentCode || "-", summary.departmentCode ? "" : "cell-quiet");
     const nameCell = appendTextCell(tr, summary.name, "subcontractor-name");
@@ -1378,7 +1590,7 @@ function renderContractTable(contractRows, monthKeys) {
     });
     firstContractRender = false;
   }
-  contractTableBody.replaceChildren(...departmentRows, ...bodyRows);
+  contractTableBody.replaceChildren(...departmentRows.map((entry) => entry.tr), ...bodyRows);
   updateLinkingVisuals();
 
   /* search produced nothing: keep the table frame, explain inside it */
@@ -1391,7 +1603,7 @@ function renderContractTable(contractRows, monthKeys) {
       ? `Pagal „${subSearch?.value ?? ""}“ subrangovų nerasta. Išvalykite paiešką, kad pamatytumėte visus (${baseContractRows.length}).`
       : "Šioje srityje subrangovų nėra.";
     emptyRow.append(cell);
-    contractTableBody.replaceChildren(...departmentRows, emptyRow);
+    contractTableBody.replaceChildren(...departmentRows.map((entry) => entry.tr), emptyRow);
     contractTableFoot.replaceChildren();
     setText(tableCaption, `${periodRange(monthKeys)}`);
     setText(tableShowing, `Rodoma 0 iš ${baseContractRows.length} subrangovų`);
@@ -1416,7 +1628,7 @@ function renderContractTable(contractRows, monthKeys) {
   const totalStatus = statusClass(deriveStatus(totals.contracted, totals.invoiced));
 
   const footRow = document.createElement("tr");
-  if (isAllObjectsView) appendTextCell(footRow, "");
+  appendTextCell(footRow, "");
   appendTextCell(footRow, "");
   appendTextCell(footRow, "IŠ VISO · subrangovai", "subcontractor-name is-strong");
   appendMoneyCell(footRow, totals.contracted, { emphasize: true }).classList.add("col-sep");
@@ -1444,87 +1656,294 @@ function renderCurrentContractTable() {
   renderContractTable(filteredContractRows(), currentMonthKeys);
 }
 
-/* ─── CSV export ──────────────────────────────────────────────────────── */
+/* ─── Excel export ────────────────────────────────────────────────────── */
+/* A styled .xlsx that mirrors the page: a Suvestinė (summary) sheet carrying
+   the same KPI figures as the cards, then a Subrangovai sheet that reproduces
+   the on-screen table — status colors, money/percent formats, monthly columns
+   and a totals row. Built with the vendored ExcelJS (window.ExcelJS). */
 
-function csvField(value) {
-  const text = String(value ?? "");
-  return /[",;\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+/* Brand palette (light theme, from styles.css), as ARGB for ExcelJS fills. */
+const XLSX_COLORS = {
+  brand:      "FF009EE0",
+  ink:        "FF1A2230",
+  inkSoft:    "FF6B7686",
+  headerBg:   "FF1A2230",
+  headerInk:  "FFFFFFFF",
+  bandBg:     "FFF2F5F9",
+  sectionBg:  "FFEAF0FE",
+  sectionInk: "FF1D4FD7",
+  clientSoft: "FFE5F5FC",   // light brand tint for client (Užsakovas) rows
+  clientInk:  "FF036C97",   // darker brand, readable on the tint
+  border:     "FFD8DEE8",
+  ok:         "FF15803D", okSoft:     "FFEAF7EF",
+  full:       "FF1D4FD7", fullSoft:   "FFEAF0FE",
+  over:       "FFB91C1C", overSoft:   "FFFDECEC",
+  missing:    "FFB45309", missingSoft:"FFFDF3E3"
+};
+
+const MONEY_FMT = "#,##0.00 €";
+const PCT_FMT = '0.0"%"';
+
+function statusFill(statusName) {
+  const cls = statusClass(statusName).className;
+  if (cls === "ok")      return { bg: XLSX_COLORS.okSoft, ink: XLSX_COLORS.ok };
+  if (cls === "full")    return { bg: XLSX_COLORS.fullSoft, ink: XLSX_COLORS.full };
+  if (cls === "over")    return { bg: XLSX_COLORS.overSoft, ink: XLSX_COLORS.over };
+  if (cls === "missing") return { bg: XLSX_COLORS.missingSoft, ink: XLSX_COLORS.missing };
+  return { bg: XLSX_COLORS.bandBg, ink: XLSX_COLORS.ink };
 }
 
-function exportCsv() {
-  const rows = sortedContractRows(filteredContractRows());
-  const header = [
-    "Objektas", "Padalinys", "Subrangovas", "Sutarta (EUR)", "Sąskaitose (EUR)",
-    "Likutis (EUR)", "Panaudota %", "Būsena", "Paskutinė sąskaita",
-    ...currentMonthKeys.map(monthLabel)
-  ];
-  const lines = [header.map(csvField).join(",")];
-  for (const row of rows) {
-    lines.push([
-      row.projectObjectNumber, row.departmentCode, row.name,
-      row.contracted.toFixed(2), row.invoiced.toFixed(2), row.remaining.toFixed(2),
-      row.usagePercent.toFixed(0), row.status, row.lastInvoice ? monthLabel(row.lastInvoice) : "",
-      ...currentMonthKeys.map((key) => numberValue(row.monthly.get(key)).toFixed(2))
-    ].map(csvField).join(","));
+function thinBorder() {
+  const side = { style: "thin", color: { argb: XLSX_COLORS.border } };
+  return { top: side, left: side, bottom: side, right: side };
+}
+
+function exportScopeLabel() {
+  if (selectedObjectNumber) return `Objektas ${selectedObjectNumber}`;
+  const objects = projectObjects();
+  return objects.length > 1 ? `Visi objektai · ${objects.length}` : "Visi objektai";
+}
+
+async function exportExcel() {
+  if (!window.ExcelJS) {
+    await alertDialog("Eksportas nepavyko", "Nepavyko įkelti „Excel“ bibliotekos. Atnaujinkite puslapį ir bandykite dar kartą.");
+    return;
   }
-  const blob = new Blob([`﻿${lines.join("\n")}`], { type: "text/csv;charset=utf-8" });
+
+  const rows = sortedContractRows(filteredContractRows());
+  const totals = scopeTotals(rows);
+  const projectValue = scopedProjectValue();
+  const clientInvoiced = scopedClientInvoiced();
+  const hasClientData = projectValue > 0 || clientInvoiced > 0;
+  const monthKeys = currentMonthKeys;
+  const scopeLabel = exportScopeLabel();
+  const periodLabel = periodRange(monthKeys);
+  const codeLabel = selectedObjectNumber || parentProjectCodeForApi() || "";
+
+  const wb = new window.ExcelJS.Workbook();
+  wb.creator = "Pinigų srautas";
+  wb.created = new Date();
+
+  buildSummarySheet(wb, {
+    totals, projectValue, clientInvoiced, hasClientData,
+    scopeLabel, periodLabel, codeLabel
+  });
+  buildContractsSheet(wb, { rows, totals, monthKeys, scopeLabel, periodLabel, codeLabel });
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+  const stamp = new Date().toISOString().slice(0, 10);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${selectedObjectNumber || parentProjectCodeForApi() || "project"}-subrangovai.csv`;
+  a.download = `${codeLabel || "projektas"}-subrangovai-${stamp}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-/* ─── Exceptions ──────────────────────────────────────────────────────── */
-
-function renderExceptions() {
-  const issues = baseContractRows.filter((row) => row.warning || row.status !== "Pagal planą");
-  exceptionsBadge.textContent = String(issues.length);
-  exceptionsBadge.classList.toggle("is-zero", issues.length === 0);
-  setText(exceptionsSummary, issues.length === 0
-    ? "Nieko nereikia peržiūrėti"
-    : `${issues.length} įspėjim${issues.length === 1 ? "as" : "ai"} reikalauja dėmesio`);
-
-  if (issues.length === 0) {
-    const ok = document.createElement("div");
-    ok.className = "drawer-empty";
-    ok.textContent = "Visi šios srities subrangovai yra pagal planą.";
-    exceptionsContent.replaceChildren(ok);
-    return;
-  }
-
-  const items = issues.map((summary) => {
-    const status = statusClass(summary.status);
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = "exception-item";
-
-    const pill = document.createElement("span");
-    pill.className = `pill ${status.pill}`;
-    pill.textContent = status.label;
-
-    const name = document.createElement("span");
-    name.className = "exception-item-name";
-    name.textContent = summary.name;
-
-    const object = document.createElement("span");
-    object.className = "exception-item-object";
-    object.textContent = summary.projectObjectNumber || "-";
-
-    const detail = document.createElement("span");
-    detail.className = "exception-item-detail";
-    detail.textContent = summary.warning
-      || (summary.status === "Trūksta sutarties"
-        ? `${money(summary.invoiced)} € sąskaitose be susietos sutarties`
-        : `panaudota ${percentFormatter.format(summary.usagePercent)}% · likutis ${money(summary.remaining)} €`);
-
-    item.append(pill, name, object, detail);
-    item.addEventListener("click", () => openDrawer(summary, "warnings"));
-    return item;
+function buildSummarySheet(wb, ctx) {
+  const ws = wb.addWorksheet("Suvestinė", {
+    properties: { defaultRowHeight: 18 },
+    views: [{ showGridLines: false }]
   });
+  ws.columns = [{ width: 38 }, { width: 22 }, { width: 4 }, { width: 38 }, { width: 22 }];
 
-  exceptionsContent.replaceChildren(...items);
+  const title = ws.getCell("A1");
+  title.value = projectDetail.projectName || ctx.codeLabel || "Projektas";
+  title.font = { name: "Calibri", size: 18, bold: true, color: { argb: XLSX_COLORS.brand } };
+  ws.mergeCells("A1:E1");
+  ws.getRow(1).height = 26;
+
+  const sub = ws.getCell("A2");
+  sub.value = [ctx.codeLabel, ctx.scopeLabel, ctx.periodLabel].filter(Boolean).join("  ·  ");
+  sub.font = { name: "Calibri", size: 11, color: { argb: XLSX_COLORS.inkSoft } };
+  ws.mergeCells("A2:E2");
+
+  const gen = ws.getCell("A3");
+  gen.value = `Sugeneruota: ${importedAtFormatter.format(new Date())}`;
+  gen.font = { name: "Calibri", size: 9, italic: true, color: { argb: XLSX_COLORS.inkSoft } };
+  ws.mergeCells("A3:E3");
+
+  /* Two side-by-side metric columns: Užsakovas (A/B) and Subrangovai (D/E). */
+  const clientRemaining = ctx.projectValue - ctx.clientInvoiced;
+  const clientUsage = ctx.projectValue > 0 ? ctx.clientInvoiced / ctx.projectValue * 100 : null;
+  const clientMetrics = ctx.hasClientData ? [
+    ["Projekto vertė", ctx.projectValue, MONEY_FMT],
+    ["Užsakovo sąskaitos iki laikotarpio", ctx.clientInvoiced, MONEY_FMT],
+    ["Likutis", clientRemaining, MONEY_FMT],
+    ["Panaudota", clientUsage, PCT_FMT]
+  ] : [];
+
+  const subMetrics = [
+    ["Subrangovų sutartinė suma", ctx.totals.contracted, MONEY_FMT],
+    ["Sąskaitose iki laikotarpio", ctx.totals.invoiced, MONEY_FMT],
+    ["Likutis", ctx.totals.remaining, MONEY_FMT],
+    ["Panaudota", ctx.totals.contracted > 0 ? ctx.totals.usage : null, PCT_FMT],
+    ["Subrangovų skaičius", ctx.totals.count, "0"],
+    ["Įspėjimai", ctx.totals.warnings, "0"]
+  ];
+
+  const startRow = 5;
+  if (ctx.hasClientData) writeMetricBlock(ws, startRow, 1, "UŽSAKOVAS", clientMetrics);
+  writeMetricBlock(ws, startRow, 4, "SUBRANGOVAI", subMetrics);
+}
+
+/* One titled column of label/value rows starting at (row, col). */
+function writeMetricBlock(ws, row, col, heading, metrics) {
+  const headCell = ws.getCell(row, col);
+  headCell.value = heading;
+  headCell.font = { name: "Calibri", size: 11, bold: true, color: { argb: XLSX_COLORS.sectionInk } };
+  headCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XLSX_COLORS.sectionBg } };
+  const headValue = ws.getCell(row, col + 1);
+  headValue.fill = headCell.fill;
+  headCell.alignment = { vertical: "middle" };
+  ws.getRow(row).height = 22;
+
+  metrics.forEach(([label, value, fmt], i) => {
+    const r = row + 1 + i;
+    const labelCell = ws.getCell(r, col);
+    labelCell.value = label;
+    labelCell.font = { name: "Calibri", size: 10, color: { argb: XLSX_COLORS.inkSoft } };
+    labelCell.alignment = { vertical: "middle" };
+
+    const valueCell = ws.getCell(r, col + 1);
+    valueCell.value = value === null ? "—" : value;
+    valueCell.numFmt = fmt;
+    valueCell.font = { name: "Calibri", size: 11, bold: true, color: { argb: XLSX_COLORS.ink } };
+    valueCell.alignment = { horizontal: "right", vertical: "middle" };
+
+    if (i % 2 === 1) {
+      const band = { type: "pattern", pattern: "solid", fgColor: { argb: XLSX_COLORS.bandBg } };
+      labelCell.fill = band;
+      valueCell.fill = band;
+    }
+  });
+}
+
+function buildContractsSheet(wb, ctx) {
+  const ws = wb.addWorksheet("Subrangovai", { views: [{ showGridLines: false }] });
+
+  const baseHeaders = [
+    "Objektas", "Padalinys", "Subrangovas / Užsakovas", "Sutarta / Vertė", "Sąskaitose",
+    "Likutis", "Panaudota", "Būsena", "Paskutinė sąskaita"
+  ];
+  const monthHeaders = ctx.monthKeys.map(monthLabel);
+  const headers = [...baseHeaders, ...monthHeaders];
+  const lastCol = headers.length;
+
+  /* Client (Užsakovas) rows — the same department-level project-value vs
+     client-invoiced rows the site pins atop the table. Shown first, visually
+     distinct, and excluded from the subcontractor totals below. */
+  const clientRows = buildDepartmentSummaryRows(ctx.monthKeys).map((entry) => entry.summary);
+
+  /* Title + context banner spanning the full table width. */
+  const titleCell = ws.getCell(1, 1);
+  titleCell.value = `Subrangovai ir užsakovas · ${ctx.scopeLabel}`;
+  titleCell.font = { name: "Calibri", size: 14, bold: true, color: { argb: XLSX_COLORS.ink } };
+  ws.mergeCells(1, 1, 1, lastCol);
+  ws.getRow(1).height = 22;
+
+  const ctxCell = ws.getCell(2, 1);
+  ctxCell.value = [
+    ctx.codeLabel, ctx.periodLabel,
+    `${ctx.rows.length} subrangov${ctx.rows.length === 1 ? "as" : "ai"}`,
+    clientRows.length ? `${clientRows.length} užsakovo eilut${clientRows.length === 1 ? "ė" : "ės"}` : ""
+  ].filter(Boolean).join("  ·  ");
+  ctxCell.font = { name: "Calibri", size: 10, color: { argb: XLSX_COLORS.inkSoft } };
+  ws.mergeCells(2, 1, 2, lastCol);
+
+  const headerRowIdx = 4;
+  const headerRow = ws.getRow(headerRowIdx);
+  headers.forEach((text, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = text;
+    cell.font = { name: "Calibri", size: 10, bold: true, color: { argb: XLSX_COLORS.headerInk } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XLSX_COLORS.headerBg } };
+    cell.alignment = { vertical: "middle", horizontal: i >= 3 ? "right" : "left", wrapText: true };
+    cell.border = thinBorder();
+  });
+  headerRow.height = 28;
+
+  /* Writes a single data row. isClient marks an Užsakovas row (brand tint +
+     "Užsakovas ·" name prefix); zebra applies the alternating band otherwise. */
+  const writeRow = (r, row, { zebra, isClient }) => {
+    const sheetRow = ws.getRow(r);
+    const objektas = row.projectObjectNumber || (isClient ? "Visi objektai" : "—");
+    const name = isClient ? `Užsakovas · ${row.name}` : row.name;
+    const values = [
+      objektas,
+      row.departmentCode || "—",
+      name,
+      row.contracted,
+      row.invoiced,
+      row.remaining,
+      row.contracted > 0 ? row.usagePercent : null,
+      statusClass(row.status).label,
+      row.lastInvoice ? monthLabel(row.lastInvoice) : "—",
+      ...ctx.monthKeys.map((key) => numberValue(row.monthly.get(key)))
+    ];
+    values.forEach((value, c) => {
+      const cell = sheetRow.getCell(c + 1);
+      cell.value = value === null ? "—" : value;
+      cell.font = { name: "Calibri", size: 10, color: { argb: XLSX_COLORS.ink } };
+      cell.border = thinBorder();
+      if (c >= 3 && c !== 7) {
+        cell.alignment = { horizontal: "right" };
+        if (c === 6) cell.numFmt = PCT_FMT;        // Panaudota %
+        else if (c !== 8) cell.numFmt = MONEY_FMT; // money columns (skip "Paskutinė sąskaita")
+      }
+      const bg = isClient ? XLSX_COLORS.clientSoft : (zebra ? XLSX_COLORS.bandBg : null);
+      if (bg) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
+    });
+
+    /* Name in bold (brand ink for client rows); status cell color-coded. */
+    sheetRow.getCell(3).font = {
+      name: "Calibri", size: 10, bold: true,
+      color: { argb: isClient ? XLSX_COLORS.clientInk : XLSX_COLORS.ink }
+    };
+    const fill = statusFill(row.status);
+    const statusCell = sheetRow.getCell(8);
+    statusCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill.bg } };
+    statusCell.font = { name: "Calibri", size: 10, bold: true, color: { argb: fill.ink } };
+    statusCell.alignment = { horizontal: "center" };
+  };
+
+  let r = headerRowIdx + 1;
+  clientRows.forEach((row) => writeRow(r++, row, { zebra: false, isClient: true }));
+  ctx.rows.forEach((row, i) => writeRow(r++, row, { zebra: i % 2 === 1, isClient: false }));
+
+  /* Totals row — subcontractors only, matching the on-screen footer. */
+  const totalRow = ws.getRow(r);
+  const monthlyTotals = ctx.monthKeys.map((key) =>
+    ctx.rows.reduce((sum, row) => sum + numberValue(row.monthly.get(key)), 0));
+  const totalValues = [
+    "", "", "IŠ VISO · subrangovai", ctx.totals.contracted, ctx.totals.invoiced, ctx.totals.remaining,
+    ctx.totals.contracted > 0 ? ctx.totals.usage : null, "", "", ...monthlyTotals
+  ];
+  totalValues.forEach((value, c) => {
+    const cell = totalRow.getCell(c + 1);
+    cell.value = value === null ? "—" : value;
+    cell.font = { name: "Calibri", size: 10, bold: true, color: { argb: XLSX_COLORS.ink } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XLSX_COLORS.bandBg } };
+    cell.border = { top: { style: "medium", color: { argb: XLSX_COLORS.ink } } };
+    if (c >= 3 && c !== 7 && c !== 8) {
+      cell.alignment = { horizontal: "right" };
+      cell.numFmt = c === 6 ? PCT_FMT : MONEY_FMT;
+    }
+  });
+  totalRow.height = 20;
+
+  /* Column widths: comfortable text columns, snug numeric columns. */
+  const widths = [13, 11, 36, 15, 14, 14, 11, 16, 16, ...monthHeaders.map(() => 13)];
+  ws.columns.forEach((column, i) => { column.width = widths[i] ?? 13; });
+
+  ws.autoFilter = {
+    from: { row: headerRowIdx, column: 1 },
+    to: { row: headerRowIdx, column: lastCol }
+  };
+  ws.views = [{ state: "frozen", xSplit: 3, ySplit: headerRowIdx, showGridLines: false }];
 }
 
 /* ─── Detail drawer ───────────────────────────────────────────────────── */
@@ -1551,6 +1970,7 @@ function openDrawer(summary, tab) {
   if (!document.body.classList.contains("drawer-open")) drawerTrigger = document.activeElement;
   selectedSummaryKey = summaryKey(summary);
   drawerTab = tab || drawerTab || "monthly";
+  if (!["monthly", "contracts", "matching"].includes(drawerTab)) drawerTab = "monthly";
   document.body.classList.add("drawer-open");
   drawer.setAttribute("aria-hidden", "false");
   for (const { tr, summary: rowSummary } of renderedContractRows) {
@@ -1582,7 +2002,7 @@ function renderDrawer(summary) {
 
   /* head */
   const head = document.createElement("div");
-  const drawerStatusTone = status.usage === "over" ? "danger" : status.usage === "warn" ? "warn" : "ok";
+  const drawerStatusTone = status.usage === "over" ? "danger" : status.usage;
   head.className = `drawer-head drawer-status-${drawerStatusTone}`;
   const title = document.createElement("div");
   title.className = "drawer-title";
@@ -1652,7 +2072,7 @@ function renderDrawer(summary) {
     drawerStat("Sąskaitose", `${money(summary.invoiced)} €`),
     drawerStat("Likutis", `${money(summary.remaining)} €`, summary.remaining < 0 ? "danger" : undefined),
     drawerStat("Panaudota", usageWrap),
-    drawerStat("Būsena", status.label, status.usage === "ok" ? "ok" : status.usage === "warn" ? "warn" : "danger"),
+    drawerStat("Būsena", status.label, status.usage === "over" ? "danger" : status.usage),
     drawerStat("Paskutinė sąskaita", summary.lastInvoice ? monthLabel(summary.lastInvoice) : "—")
   );
 
@@ -1662,10 +2082,8 @@ function renderDrawer(summary) {
   tabs.setAttribute("role", "tablist");
   const tabDefs = [
     { id: "monthly", label: "Mėnesiai" },
-    { id: "sources", label: "Pirminės eilutės" },
     { id: "contracts", label: "Sutartys" },
-    { id: "matching", label: "Susiejimas" },
-    { id: "warnings", label: "Įspėjimai" }
+    { id: "matching", label: "Susiejimas" }
   ];
   for (const def of tabDefs) {
     const tab = document.createElement("button");
@@ -1685,10 +2103,8 @@ function renderDrawer(summary) {
   const body = document.createElement("div");
   body.className = "drawer-body";
   if (drawerTab === "monthly") body.append(...drawerMonthly(summary));
-  else if (drawerTab === "sources") body.append(drawerSources(summary));
   else if (drawerTab === "contracts") body.append(...drawerContracts(summary));
-  else if (drawerTab === "matching") body.append(...drawerMatching(summary));
-  else body.append(...drawerWarnings(summary));
+  else body.append(...drawerMatching(summary));
 
   const scroll = document.createElement("div");
   scroll.className = "drawer-scroll";
@@ -1795,48 +2211,6 @@ function drawerMonthly(summary) {
   return nodes;
 }
 
-function drawerSources(summary) {
-  const aliasNames = new Set(summary.links.map((link) => String(link.sourceName).toLowerCase()));
-  const rows = allRows.filter((row) => {
-    const name = cleanSubcontractorDisplayName(row.subcontractorName).toLowerCase();
-    const matchesName = name === summary.name.toLowerCase() || aliasNames.has(name);
-    const matchesObject = !summary.projectObjectNumber
-      || String(row.objectNumber ?? "").toLowerCase() === summary.projectObjectNumber.toLowerCase();
-    return matchesName && matchesObject;
-  });
-
-  if (rows.length === 0) {
-    const emptyEl = document.createElement("div");
-    emptyEl.className = "drawer-empty";
-    emptyEl.textContent = "Šiam subrangovui nėra importuotų pirminių eilučių.";
-    return emptyEl;
-  }
-
-  const table = document.createElement("table");
-  table.className = "drawer-table";
-  const thead = document.createElement("thead");
-  const headRow = document.createElement("tr");
-  [["Šaltinis", ""], ["Mėnuo", ""], ["Įvesta kaip", ""], ["Suma (EUR)", "col-money"]].forEach(([t, c]) => {
-    const th = document.createElement("th");
-    th.textContent = t;
-    if (c) th.className = c;
-    headRow.append(th);
-  });
-  thead.append(headRow);
-
-  const tbody = document.createElement("tbody");
-  for (const row of rows) {
-    const tr = document.createElement("tr");
-    appendTextCell(tr, `${row.sourceSheet || "Lapas"} ${row.sourceRow ? `#${row.sourceRow}` : ""}`.trim(), "source-ref");
-    appendTextCell(tr, monthLabel(`${row.year}-${String(row.month).padStart(2, "0")}`));
-    appendTextCell(tr, cleanSubcontractorDisplayName(row.subcontractorName));
-    appendMoneyCell(tr, row.amountWithoutVat);
-    tbody.append(tr);
-  }
-  table.append(thead, tbody);
-  return table;
-}
-
 function drawerContracts(summary) {
   if (summary.isImportedOnly) {
     const note = document.createElement("p");
@@ -1928,44 +2302,6 @@ function drawerMatching(summary) {
   return [emptyEl];
 }
 
-function drawerWarnings(summary) {
-  const status = statusClass(summary.status);
-  const issues = [];
-  if (summary.warning) issues.push(summary.warning);
-  if (summary.status === "Viršyta riba") {
-    issues.push(`Sąskaitose ${money(summary.invoiced)} € viršija sutartą ${money(summary.contracted)} € suma ${money(Math.abs(summary.remaining))} €.`);
-  } else if (summary.status === "Pasiekta riba") {
-    issues.push("Sutarta suma visiškai panaudota.");
-  } else if (summary.status === "Artėja prie ribos") {
-    issues.push(`Panaudota ${percentFormatter.format(summary.usagePercent)}% sutartos sumos. Liko ${money(summary.remaining)} €.`);
-  } else if (summary.status === "Trūksta sutarties") {
-    issues.push("Sąskaitos importuotos, bet šiam subrangovui nesusieta jokia sutartis.");
-  }
-
-  if (issues.length === 0) {
-    const emptyEl = document.createElement("div");
-    emptyEl.className = "drawer-empty";
-    emptyEl.textContent = "Įspėjimų nėra. Šis subrangovas yra pagal planą.";
-    return [emptyEl];
-  }
-
-  const nodes = [];
-  const pillWrap = document.createElement("p");
-  pillWrap.className = "drawer-note";
-  const pill = document.createElement("span");
-  pill.className = `pill ${status.pill}`;
-  pill.textContent = status.label;
-  pillWrap.append(pill);
-  nodes.push(pillWrap);
-  for (const issue of issues) {
-    const p = document.createElement("p");
-    p.className = "drawer-note";
-    p.textContent = issue;
-    nodes.push(p);
-  }
-  return nodes;
-}
-
 /* ─── Department client rows (pinned atop the subcontractor table) ─────── */
 /* The client side of each department, shown as rows in the same table and the
    same columns as subcontractors: Contracted = the department's contracted
@@ -2030,15 +2366,36 @@ function buildDepartmentSummaryRows(monthKeys) {
     const status = statusClass(deriveStatus(entry.contracted, entry.invoiced));
     const remaining = entry.contracted - entry.invoiced;
 
+    const objects = [...entry.objects];
+    const clientName = [...entry.clients][0] || "Užsakovo vertė";
+    const summary = {
+      name: clientName,
+      projectObjectNumber: objects.length === 1 ? objects[0] : "",
+      objectNumber: objects.length === 1 ? objects[0] : "",
+      objectPrintCode: entry.objectPrintCode || "",
+      departmentCode: entry.dept || "",
+      objectName: "Užsakovo (kliento) vertė",
+      contracted: entry.contracted,
+      invoiced: entry.invoiced,
+      remaining,
+      usagePercent: usage,
+      status: deriveStatus(entry.contracted, entry.invoiced),
+      warning: "",
+      isImportedOnly: false,
+      isClientRow: true,
+      rowKey: `client:${entry.dept}`,
+      links: [],
+      monthly: entry.monthly,
+      lastInvoice: entry.lastInvoice
+    };
+
     const tr = document.createElement("tr");
     tr.className = "is-department-row";
+    if (selectedSummaryKey && summaryKey(summary) === selectedSummaryKey) tr.classList.add("is-selected");
 
-    if (isAllObjectsView) {
-      const objects = [...entry.objects];
-      appendTextCell(tr, objects.length === 1 ? objects[0] : `${objects.length} objekt${objects.length === 1 ? "as" : "ai"}`, "col-code");
-    }
+    appendTextCell(tr, objects.length === 1 ? objects[0] : `${objects.length} objekt${objects.length === 1 ? "as" : "ai"}`, "col-code");
     appendTextCell(tr, entry.dept || "—", entry.dept ? "col-code" : "cell-quiet");
-    const nameCell = appendTextCell(tr, [...entry.clients][0] || "Užsakovo vertė", "subcontractor-name");
+    const nameCell = appendTextCell(tr, clientName, "subcontractor-name");
     const badge = document.createElement("span");
     badge.className = "client-value-badge";
     badge.textContent = "Užsakovas";
@@ -2061,7 +2418,19 @@ function buildDepartmentSummaryRows(monthKeys) {
       });
       appendMoneyCell(tr, entry.invoiced, { emphasize: true });
     }
-    return tr;
+
+    tr.tabIndex = 0;
+    tr.setAttribute("role", "button");
+    tr.setAttribute("aria-label", `${clientName} — atidaryti užsakovo informaciją`);
+    tr.addEventListener("click", () => openDrawer(summary));
+    tr.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target !== tr) return;
+      event.preventDefault();
+      openDrawer(summary);
+    });
+
+    return { tr, summary };
   });
 }
 
@@ -2341,7 +2710,6 @@ async function loadProject() {
     renderObjectClientValues(monthKeys);
     renderCurrentContractTable();
     renderImportedRows(monthKeys);
-    renderExceptions();
     show(content);
 
     /* refresh the open drawer with re-fetched data */
