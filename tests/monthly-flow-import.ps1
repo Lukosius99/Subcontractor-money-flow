@@ -110,7 +110,7 @@ $multiSheetJson = New-MonthlyFlowJsonV14 @(
         sourceSheet = "subranga"
         sourceRow = 5
         projectCode = "P3000-01"
-        objectNumber = "OBJ-001"
+        objectNumber = "P3000-01"
         subcontractorName = "Delta"
         objectName = "Drainage"
         amountWithoutVat = 400
@@ -122,8 +122,8 @@ $multiSheetJson = New-MonthlyFlowJsonV14 @(
         sourceSheet = "SMD"
         sourceRow = 5
         projectCode = "P3000-01"
-        objectNumber = "OBJ-001"
-        subcontractorName = "Delta"
+        objectNumber = "P3000-01"
+        customerName = "Klientas"
         objectName = "Drainage"
         amountWithoutVat = 600
         indexedAmount = $null
@@ -134,6 +134,8 @@ $multiSheetJson = New-MonthlyFlowJsonV14 @(
 
 $env:ASPNETCORE_ENVIRONMENT = "Development"
 $env:MONEY_FLOW_DB_PATH = $dbPath
+$env:MONEY_FLOW_API_KEY = "test-api-key"
+$PSDefaultParameterValues["Invoke-RestMethod:Headers"] = @{ "X-Api-Key" = $env:MONEY_FLOW_API_KEY }
 $server = Start-Process -FilePath "dotnet" -ArgumentList "run --urls $baseUrl" -WorkingDirectory $projectRoot -PassThru -WindowStyle Hidden
 
 try {
@@ -197,12 +199,21 @@ try {
     $project3000 = Invoke-RestMethod -Method Get -Uri "$baseUrl/api/projects/P3000-01/monthly-flow"
     $project3000Rows = @($project3000.groups | ForEach-Object { $_.rows } | ForEach-Object { $_ })
     $project3000Sheets = @($project3000Rows | ForEach-Object { $_.sourceSheet })
-    if ($project3000Rows.Count -ne 2 -or [decimal]::Round([decimal]$project3000.totals.amountWithoutVat, 2) -ne [decimal]1000.00) {
+    # SMD rows are client-value rows and are deliberately excluded from the
+    # subcontractor total (they surface separately via smdCustomerRows). Both
+    # rows remain present in the detail groups, but the subcontractor total is
+    # the subranga row only (400); the SMD row's 600 shows as a client value.
+    if ($project3000Rows.Count -ne 2 -or [decimal]::Round([decimal]$project3000.totals.amountWithoutVat, 2) -ne [decimal]400.00) {
         throw "Schema 1.4 multi-sheet rows did not total correctly: $($project3000 | ConvertTo-Json -Depth 8 -Compress)"
     }
 
     if ($project3000Sheets -notcontains "subranga" -or $project3000Sheets -notcontains "SMD") {
         throw "Schema 1.4 sourceSheet was not exposed on imported rows: $($project3000 | ConvertTo-Json -Depth 8 -Compress)"
+    }
+
+    $project3000Smd = @($project3000.smdCustomerRows)
+    if ($project3000Smd.Count -ne 1 -or [decimal]::Round([decimal]$project3000Smd[0].clientMonthlyAmount, 2) -ne [decimal]600.00) {
+        throw "Schema 1.4 SMD row should surface as a client value of 600: $($project3000 | ConvertTo-Json -Depth 8 -Compress)"
     }
 
     $history = Invoke-RestMethod -Method Get -Uri "$baseUrl/api/imports/monthly-flow/status"

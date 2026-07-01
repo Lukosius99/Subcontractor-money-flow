@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $dbPath = Join-Path $projectRoot "test-data/subcontractor-name-matching.db"
@@ -68,6 +68,8 @@ $monthlyJson = @{
 # Kestrel to port 5000 and uses the live ProgramData DB) does not hijack the test.
 $env:ASPNETCORE_ENVIRONMENT = "Development"
 $env:MONEY_FLOW_DB_PATH = $dbPath
+$env:MONEY_FLOW_API_KEY = "test-api-key"
+$PSDefaultParameterValues["Invoke-RestMethod:Headers"] = @{ "X-Api-Key" = $env:MONEY_FLOW_API_KEY }
 $server = Start-Process -FilePath "dotnet" -ArgumentList "run --urls $baseUrl" -WorkingDirectory $projectRoot -PassThru -WindowStyle Hidden
 
 # PowerShell 5.1 does not send a string -Body as UTF-8, which corrupts the
