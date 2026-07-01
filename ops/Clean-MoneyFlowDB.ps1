@@ -1,6 +1,16 @@
 # Clean-MoneyFlowDB.ps1 — Backup and wipe the MoneyFlow SQLite database
 # Run as Administrator
 # The app will recreate a fresh empty database on next start.
+#
+# DESTRUCTIVE: this deletes the live production database. It lives in ops/ and
+# requires an explicit typed confirmation so it cannot be run by accident.
+
+# -- 0. Guard against accidental execution ------------------------------------
+$confirm = Read-Host "This DELETES the live MoneyFlow database. Type DELETE to proceed"
+if ($confirm -ne "DELETE") {
+    Write-Host "Aborted - no changes made." -ForegroundColor Yellow
+    exit 1
+}
 
 $dbDir     = "C:\ProgramData\PADS\MoneyFlow"
 $dbPath    = "$dbDir\monthly-money-flow.db"

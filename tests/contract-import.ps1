@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $dbPath = Join-Path $projectRoot "test-data/contract-import.db"
@@ -257,6 +257,8 @@ $monthlyJson = @{
 
 $env:ASPNETCORE_ENVIRONMENT = "Development"
 $env:MONEY_FLOW_DB_PATH = $dbPath
+$env:MONEY_FLOW_API_KEY = "test-api-key"
+$PSDefaultParameterValues["Invoke-RestMethod:Headers"] = @{ "X-Api-Key" = $env:MONEY_FLOW_API_KEY }
 $server = Start-Process -FilePath "dotnet" -ArgumentList "run --urls $baseUrl" -WorkingDirectory $projectRoot -PassThru -WindowStyle Hidden
 
 try {
@@ -358,8 +360,11 @@ try {
         throw "Monthly import should update blank project display name: $($project | ConvertTo-Json -Depth 8 -Compress)"
     }
 
+    # Status is a deliberate two-state model (StatusFor): usage <= 100% is on
+    # track ("Pagal planą"), only going over the contracted amount is flagged
+    # ("Viršyta riba"). There are no "near limit"/"at limit" gradations.
     $near = $contractRows | Where-Object { $_.objectNumber -eq "003" }
-    if ([decimal]$near.remaining -ne [decimal]5000 -or [decimal]$near.usagePercent -ne [decimal]95 -or $near.status -ne "Artėja prie ribos") {
+    if ([decimal]$near.remaining -ne [decimal]5000 -or [decimal]$near.usagePercent -ne [decimal]95 -or $near.status -ne "Pagal planą") {
         throw "Near-limit row was incorrect: $($near | ConvertTo-Json -Depth 8 -Compress)"
     }
 
@@ -369,7 +374,7 @@ try {
     }
 
     $atLimit = $contractRows | Where-Object { $_.objectNumber -eq "005" }
-    if ([decimal]$atLimit.remaining -ne [decimal]0 -or [decimal]$atLimit.usagePercent -ne [decimal]100 -or $atLimit.status -ne "Pasiekta riba") {
+    if ([decimal]$atLimit.remaining -ne [decimal]0 -or [decimal]$atLimit.usagePercent -ne [decimal]100 -or $atLimit.status -ne "Pagal planą") {
         throw "At-limit row was incorrect: $($atLimit | ConvertTo-Json -Depth 8 -Compress)"
     }
 
@@ -389,7 +394,7 @@ try {
     }
 
     $tetasBeforeUpdate = $contractRows | Where-Object { $_.objectNumber -eq "002" }
-    if ([decimal]$tetasBeforeUpdate.contracted -ne [decimal]4 -or [decimal]$tetasBeforeUpdate.invoiced -ne [decimal]4 -or [decimal]$tetasBeforeUpdate.remaining -ne [decimal]0 -or [decimal]$tetasBeforeUpdate.usagePercent -ne [decimal]100 -or $tetasBeforeUpdate.status -ne "Pasiekta riba") {
+    if ([decimal]$tetasBeforeUpdate.contracted -ne [decimal]4 -or [decimal]$tetasBeforeUpdate.invoiced -ne [decimal]4 -or [decimal]$tetasBeforeUpdate.remaining -ne [decimal]0 -or [decimal]$tetasBeforeUpdate.usagePercent -ne [decimal]100 -or $tetasBeforeUpdate.status -ne "Pagal planą") {
         throw "TETas baseline contract detail was incorrect: $($tetasBeforeUpdate | ConvertTo-Json -Depth 8 -Compress)"
     }
 

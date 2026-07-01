@@ -73,6 +73,8 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dbPath) | Out-Nul
 
 $env:ASPNETCORE_ENVIRONMENT = "Development"
 $env:MONEY_FLOW_DB_PATH = $dbPath
+$env:MONEY_FLOW_API_KEY = "test-api-key"
+$PSDefaultParameterValues["Invoke-RestMethod:Headers"] = @{ "X-Api-Key" = $env:MONEY_FLOW_API_KEY }
 $server = Start-Process -FilePath "dotnet" -ArgumentList "run --urls $baseUrl" -WorkingDirectory $projectRoot -PassThru -WindowStyle Hidden
 
 try {
@@ -96,20 +98,24 @@ try {
     Invoke-RestMethod -Method Post -Uri "$baseUrl/api/imports/monthly-flow?sourceFileName=monthly-flow-shared-code-selector-test.json" -ContentType "application/json" -Body $sharedProjectCodeMultiObjectJson | Out-Null
 
     $projects = Invoke-RestMethod "$baseUrl/api/projects"
-    if ($projects.projectCodes -notcontains $expectedParentProjectCode -or $projects.projectCodes -contains $expectedProjectCode) {
+    # Monthly-only projects (no contract import) are classified inactive, so they
+    # appear in allProjectCodes / inactiveProjects rather than the active
+    # projectCodes list. Assert against the full project set accordingly.
+    $allProjects = @($projects.projects) + @($projects.inactiveProjects)
+    if ($projects.allProjectCodes -notcontains $expectedParentProjectCode -or $projects.allProjectCodes -contains $expectedProjectCode) {
         throw "Project list did not include only the parent project code."
     }
 
-    if ($projects.projectCodes -notcontains "PSEL" -or $projects.projectCodes -contains "PSEL-01" -or $projects.projectCodes -contains "PSEL-02") {
+    if ($projects.allProjectCodes -notcontains "PSEL" -or $projects.allProjectCodes -contains "PSEL-01" -or $projects.allProjectCodes -contains "PSEL-02") {
         throw "Project list should show PSEL parent only for multiple objects: $($projects | ConvertTo-Json -Depth 8 -Compress)"
     }
 
-    $selectorProject = @($projects.projects) | Where-Object { $_.projectCode -eq "PSEL" }
+    $selectorProject = $allProjects | Where-Object { $_.projectCode -eq "PSEL" }
     if ($selectorProject.objectCount -ne 2) {
         throw "PSEL should report two objects: $($selectorProject | ConvertTo-Json -Depth 8 -Compress)"
     }
 
-    $sharedCodeProject = @($projects.projects) | Where-Object { $_.projectCode -eq "PBUG" }
+    $sharedCodeProject = $allProjects | Where-Object { $_.projectCode -eq "PBUG" }
     if ($sharedCodeProject.objectCount -ne 2 -or @($sharedCodeProject.objects).Count -ne 2 -or @($sharedCodeProject.objects | Where-Object { $_.objectNumber -in @("PBUG-01", "PBUG-02") }).Count -ne 2) {
         throw "PBUG should count distinct objectNumber values even when projectCode is shared: $($sharedCodeProject | ConvertTo-Json -Depth 8 -Compress)"
     }
@@ -120,12 +126,12 @@ try {
     }
 
     $index = Invoke-WebRequest -Uri "$baseUrl/" -UseBasicParsing
-    if ($index.Content -notmatch "Projects" -or $index.Content -notmatch "importLine") {
+    if ($index.Content -notmatch "Projektai" -or $index.Content -notmatch "latestImportText") {
         throw "Projects page did not load expected HTML."
     }
 
     $detail = Invoke-WebRequest -Uri "$baseUrl/project.html?projectCode=$expectedProjectCode" -UseBasicParsing
-    if ($detail.Content -notmatch "Project detail") {
+    if ($detail.Content -notmatch "Projekto informacija") {
         throw "Project detail page did not load expected HTML."
     }
 
