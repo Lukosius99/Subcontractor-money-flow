@@ -1127,19 +1127,19 @@ public sealed class MonthlyFlowStore
 
     public static string? ResolveSmdClientName(string? explicitClientName, string? projectCode, string? legacySubcontractorName)
     {
-        var explicitName = CleanCustomerDisplayName(explicitClientName);
+        var explicitName = SubcontractorNormalizer.CleanCustomerDisplayName(explicitClientName);
         if (!string.IsNullOrWhiteSpace(explicitName))
         {
             return explicitName;
         }
 
-        var legacyName = CleanCustomerDisplayName(legacySubcontractorName);
+        var legacyName = SubcontractorNormalizer.CleanCustomerDisplayName(legacySubcontractorName);
         if (!string.IsNullOrWhiteSpace(legacyName) && !LooksLikeDepartmentCode(legacyName))
         {
             return legacyName;
         }
 
-        var projectCodeName = CleanCustomerDisplayName(projectCode);
+        var projectCodeName = SubcontractorNormalizer.CleanCustomerDisplayName(projectCode);
         if (!string.IsNullOrWhiteSpace(projectCodeName) && !LooksLikeProjectOrObjectCode(projectCodeName))
         {
             return projectCodeName;
@@ -1235,7 +1235,7 @@ public sealed class MonthlyFlowStore
                 contract.ObjectNumber,
                 contract.ObjectPrintCode,
                 contract.DepartmentCode,
-                CanonicalSubcontractorName(contract.SubcontractorName),
+                SubcontractorNormalizer.CanonicalSubcontractorName(contract.SubcontractorName),
                 contract.ObjectName,
                 contract.ContractedAmount,
                 matchingRows ?? [],
@@ -1265,7 +1265,7 @@ public sealed class MonthlyFlowStore
                 first.ObjectNumber,
                 null,
                 null,
-                string.IsNullOrWhiteSpace(first.SubcontractorName) ? "(Be subrangovo)" : CanonicalSubcontractorName(first.SubcontractorName),
+                string.IsNullOrWhiteSpace(first.SubcontractorName) ? "(Be subrangovo)" : SubcontractorNormalizer.CanonicalSubcontractorName(first.SubcontractorName),
                 first.ObjectName ?? "",
                 0,
                 group.Value,
@@ -1374,7 +1374,7 @@ public sealed class MonthlyFlowStore
             .GroupBy(row => new
             {
                 ObjectNumber = EffectiveObjectNumber(row.ProjectCode, row.ObjectNumber),
-                CustomerKey = NormalizeClientName(ResolveSmdClientName(row.CustomerName, row.ProjectCode, row.SubcontractorName)),
+                CustomerKey = SubcontractorNormalizer.NormalizeClientName(ResolveSmdClientName(row.CustomerName, row.ProjectCode, row.SubcontractorName)),
                 row.Year,
                 row.Month
             })
@@ -1389,7 +1389,7 @@ public sealed class MonthlyFlowStore
                 return new
                 {
                     group.Key.ObjectNumber,
-                    CustomerName = CanonicalClientDisplayName(customerNames),
+                    CustomerName = SubcontractorNormalizer.CanonicalClientDisplayName(customerNames),
                     group.Key.Year,
                     group.Key.Month,
                     ObjectName = first.ObjectName,
@@ -1408,7 +1408,7 @@ public sealed class MonthlyFlowStore
         var result = new List<SmdCustomerInvoiceRow>();
         foreach (var row in monthlyRows)
         {
-            var totalKey = $"{NormalizeKeyPart(row.ObjectNumber)}|{NormalizeClientName(row.CustomerName)}";
+            var totalKey = $"{NormalizeKeyPart(row.ObjectNumber)}|{SubcontractorNormalizer.NormalizeClientName(row.CustomerName)}";
             totals.TryGetValue(totalKey, out var previousTotal);
             var totalYtd = previousTotal + row.ClientMonthlyAmount;
             totals[totalKey] = totalYtd;
@@ -1623,7 +1623,7 @@ public sealed class MonthlyFlowStore
         DateTimeOffset now)
     {
         var names = rawNames
-            .Select(CleanSubcontractorDisplayName)
+            .Select(SubcontractorNormalizer.CleanSubcontractorDisplayName)
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Select(name => name!)
             .Distinct(StringComparer.Ordinal)
@@ -1634,7 +1634,7 @@ public sealed class MonthlyFlowStore
         }
 
         var identities = names
-            .Select(NormalizeSubcontractorIdentity)
+            .Select(SubcontractorNormalizer.NormalizeSubcontractorIdentity)
             .Where(identity => !string.IsNullOrWhiteSpace(identity.NormalizedKey))
             .ToList();
         var keys = identities
@@ -1713,14 +1713,14 @@ public sealed class MonthlyFlowStore
         var changed = false;
         foreach (var configured in _configuredAliases)
         {
-            var rawName = CleanSubcontractorDisplayName(configured.RawName);
-            var canonicalName = CleanSubcontractorDisplayName(configured.CanonicalName);
+            var rawName = SubcontractorNormalizer.CleanSubcontractorDisplayName(configured.RawName);
+            var canonicalName = SubcontractorNormalizer.CleanSubcontractorDisplayName(configured.CanonicalName);
             if (string.IsNullOrWhiteSpace(rawName) || string.IsNullOrWhiteSpace(canonicalName))
             {
                 continue;
             }
 
-            var normalizedKey = NormalizeSubcontractorName(rawName);
+            var normalizedKey = SubcontractorNormalizer.NormalizeSubcontractorName(rawName);
             var alias = await db.SubcontractorAliases
                 .FirstOrDefaultAsync(existing => existing.NormalizedKey == normalizedKey, cancellationToken);
             if (alias is null)
@@ -1823,7 +1823,7 @@ public sealed class MonthlyFlowStore
             // Resolve both sides exactly like read-time matching does (alias map
             // included) so the stored keys always hit the same dictionary slots.
             var aliasMap = await GetSubcontractorAliasMapAsync(db, cancellationToken);
-            var sourceIdentity = NormalizeSubcontractorIdentity(sourceSubcontractorName);
+            var sourceIdentity = SubcontractorNormalizer.NormalizeSubcontractorIdentity(sourceSubcontractorName);
             var sourceKey = SubcontractorMatchKey(sourceSubcontractorName, aliasMap);
             var targetKey = SubcontractorMatchKey(contract.SubcontractorName, aliasMap);
             if (string.IsNullOrWhiteSpace(sourceIdentity.BaseName) || string.IsNullOrWhiteSpace(sourceKey))
@@ -1853,7 +1853,7 @@ public sealed class MonthlyFlowStore
                     SourceSubcontractorKey = sourceKey,
                     TargetSubcontractorKey = targetKey,
                     SourceSubcontractorName = sourceIdentity.CanonicalDisplayName,
-                    TargetSubcontractorName = CanonicalSubcontractorName(contract.SubcontractorName)
+                    TargetSubcontractorName = SubcontractorNormalizer.CanonicalSubcontractorName(contract.SubcontractorName)
                 };
                 db.ManualContractLinks.Add(link);
             }
@@ -1861,7 +1861,7 @@ public sealed class MonthlyFlowStore
             {
                 link.TargetSubcontractorKey = targetKey;
                 link.SourceSubcontractorName = sourceIdentity.CanonicalDisplayName;
-                link.TargetSubcontractorName = CanonicalSubcontractorName(contract.SubcontractorName);
+                link.TargetSubcontractorName = SubcontractorNormalizer.CanonicalSubcontractorName(contract.SubcontractorName);
             }
 
             await db.SaveChangesAsync(cancellationToken);
@@ -1928,7 +1928,7 @@ public sealed class MonthlyFlowStore
             // Resolve the subcontractor key exactly like read-time matching so the
             // stored key hits the same dictionary slot in ApplyObjectAssignments.
             var aliasMap = await GetSubcontractorAliasMapAsync(db, cancellationToken);
-            var identity = NormalizeSubcontractorIdentity(subcontractorName);
+            var identity = SubcontractorNormalizer.NormalizeSubcontractorIdentity(subcontractorName);
             var subcontractorKey = SubcontractorMatchKey(subcontractorName, aliasMap);
             if (string.IsNullOrWhiteSpace(identity.BaseName) || string.IsNullOrWhiteSpace(subcontractorKey))
             {
@@ -2019,7 +2019,7 @@ public sealed class MonthlyFlowStore
             .GroupBy(alias => alias.NormalizedKey, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => NormalizeSubcontractorName(group.First().CanonicalName),
+                group => SubcontractorNormalizer.NormalizeSubcontractorName(group.First().CanonicalName),
                 StringComparer.Ordinal);
     }
 
@@ -2027,7 +2027,7 @@ public sealed class MonthlyFlowStore
         string? subcontractorName,
         IReadOnlyDictionary<string, string> aliasMap)
     {
-        var normalizedKey = NormalizeSubcontractorName(subcontractorName);
+        var normalizedKey = SubcontractorNormalizer.NormalizeSubcontractorName(subcontractorName);
         return aliasMap.TryGetValue(normalizedKey, out var canonicalKey)
             ? canonicalKey
             : normalizedKey;
@@ -2147,324 +2147,6 @@ public sealed class MonthlyFlowStore
         return Regex.IsMatch(text, @"^[A-Z]{2,6}\d{0,3}$");
     }
 
-    public static string NormalizeClientName(string? value)
-    {
-        var text = CleanCustomerDisplayName(value);
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return "";
-        }
-
-        foreach (var quote in SubcontractorQuoteChars)
-        {
-            text = text.Replace(quote.ToString(), " ");
-        }
-
-        text = Regex.Replace(text, @"[()[\]{}]", " ");
-        text = Regex.Replace(text, @"\s*[,.]\s*", " ");
-        text = CollapseWhitespace(text).ToUpperInvariant();
-        var tokens = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
-        while (tokens.Count > 0 && ClientLegalFormTokens.Contains(tokens[0]))
-        {
-            tokens.RemoveAt(0);
-        }
-
-        while (tokens.Count > 0 && ClientLegalFormTokens.Contains(tokens[^1]))
-        {
-            tokens.RemoveAt(tokens.Count - 1);
-        }
-
-        return string.Join(' ', tokens);
-    }
-
-    private static string CanonicalClientDisplayName(IReadOnlyCollection<string> rawNames)
-    {
-        var candidates = rawNames
-            .Select(CleanClientDisplayName)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Select(name => name!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(ClientDisplayScore)
-            .ThenBy(name => name.Length)
-            .ThenBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        return candidates.Count == 0 ? "(Be užsakovo)" : candidates[0];
-    }
-
-    private static string? CleanClientDisplayName(string? value)
-    {
-        var text = CleanCustomerDisplayName(value);
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return null;
-        }
-
-        foreach (var quote in SubcontractorQuoteChars)
-        {
-            text = text.Replace(quote.ToString(), " ");
-        }
-
-        text = Regex.Replace(text, @"\s*[,.]\s*", " ");
-        text = CollapseWhitespace(text);
-        var tokens = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
-        while (tokens.Count > 0 && ClientLegalFormTokens.Contains(tokens[0]))
-        {
-            tokens.RemoveAt(0);
-        }
-
-        while (tokens.Count > 0 && ClientLegalFormTokens.Contains(tokens[^1]))
-        {
-            tokens.RemoveAt(tokens.Count - 1);
-        }
-
-        return ToClientDisplayCase(tokens.Count == 0 ? text : string.Join(' ', tokens));
-    }
-
-    private static string ToClientDisplayCase(string value)
-    {
-        if (!value.Any(char.IsLetter) || value.Any(char.IsLower))
-        {
-            return value;
-        }
-
-        return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(value.ToLower(CultureInfo.CurrentCulture));
-    }
-
-    private static int ClientDisplayScore(string name)
-    {
-        var score = 0;
-        if (name.Contains('"') || name.Contains('„') || name.Contains('“') || name.Contains('”'))
-        {
-            score += 10;
-        }
-
-        var firstToken = NormalizeKeyPart(name).Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(firstToken) && ClientLegalFormTokens.Contains(firstToken))
-        {
-            score += 2;
-        }
-
-        return score;
-    }
-
-    private static readonly IReadOnlyCollection<LegalFormPattern> SubcontractorLegalForms =
-    [
-        new("SP Z O O", ["SP", "Z", "O", "O"]),
-        new("VŠĮ", ["VŠĮ"]),
-        new("VŠĮ", ["VSI"]),
-        new("UAB", ["UAB"]),
-        new("MB", ["MB"]),
-        new("AB", ["AB"]),
-        new("IĮ", ["IĮ"]),
-        new("II", ["II"]),
-        new("VĮ", ["VĮ"]),
-        new("SIA", ["SIA"]),
-        new("AS", ["AS"]),
-        new("GMBH", ["GMBH"]),
-        new("OU", ["OU"]),
-        new("OÜ", ["OÜ"]),
-    ];
-
-    private static readonly HashSet<string> ClientLegalFormTokens = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "AB", "UAB", "MB", "VŠĮ", "VšĮ", "IĮ", "VĮ"
-    };
-
-    private static readonly char[] SubcontractorQuoteChars =
-    {
-        '"', '\'', '„', '“', '”', '«', '»', // " ' „ “ ” « »
-    };
-
-    public static SubcontractorNameIdentity NormalizeSubcontractorIdentity(string? value)
-    {
-        var rawName = CollapseWhitespace(value);
-        if (string.IsNullOrWhiteSpace(rawName))
-        {
-            return new SubcontractorNameIdentity("", "(Be subrangovo)", "", "", "");
-        }
-
-        var text = rawName;
-        var pipeIndex = text.IndexOf('|');
-        if (pipeIndex >= 0)
-        {
-            text = pipeIndex == 0 ? text[(pipeIndex + 1)..] : text[..pipeIndex];
-        }
-
-        foreach (var quote in SubcontractorQuoteChars)
-        {
-            text = text.Replace(quote.ToString(), " ");
-        }
-
-        text = Regex.Replace(text, @"\bsp\.?\s*z\.?\s*o\.?\s*o\.?\b", " SP Z O O ", RegexOptions.IgnoreCase);
-        text = Regex.Replace(text, @"[;,()[\]{}]", " ");
-        text = Regex.Replace(text, @"\s*\.\s*", ".");
-        text = CollapseWhitespace(text);
-        if (text.Length == 0)
-        {
-            return new SubcontractorNameIdentity(rawName, "(Be subrangovo)", "", "", "");
-        }
-
-        var tokens = text
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Select(token => NormalizeCompanyToken(token).ToUpperInvariant())
-            .ToList();
-
-        var legalForm = "";
-        if (TryRemoveLegalForm(tokens, fromStart: true, out var startLegalForm))
-        {
-            legalForm = startLegalForm;
-        }
-        else if (TryRemoveLegalForm(tokens, fromStart: false, out var endLegalForm))
-        {
-            legalForm = endLegalForm;
-        }
-
-        var baseName = CollapseWhitespace(string.Join(' ', tokens));
-        var normalizedKey = string.IsNullOrWhiteSpace(baseName)
-            ? legalForm
-            : $"{legalForm}|{baseName}";
-        var canonicalName = CanonicalSubcontractorDisplayName(legalForm, baseName, rawName);
-
-        return new SubcontractorNameIdentity(
-            rawName,
-            canonicalName,
-            legalForm,
-            baseName,
-            normalizedKey);
-    }
-
-    /// <summary>
-    /// Builds a deterministic matching key for a subcontractor company name.
-    /// The key is LEGALFORM|BASENAME; no substring, fuzzy, or similarity matching
-    /// is used.
-    /// </summary>
-    public static string NormalizeSubcontractorName(string? value)
-    {
-        return NormalizeSubcontractorIdentity(value).NormalizedKey;
-    }
-
-    public static string CanonicalSubcontractorName(string? value)
-    {
-        return NormalizeSubcontractorIdentity(value).CanonicalDisplayName;
-    }
-
-    private static bool TryRemoveLegalForm(List<string> tokens, bool fromStart, out string legalForm)
-    {
-        foreach (var candidate in SubcontractorLegalForms.OrderByDescending(form => form.Tokens.Length))
-        {
-            if (fromStart)
-            {
-                if (tokens.Count < candidate.Tokens.Length
-                    || !candidate.Tokens.SequenceEqual(tokens.Take(candidate.Tokens.Length), StringComparer.Ordinal))
-                {
-                    continue;
-                }
-
-                tokens.RemoveRange(0, candidate.Tokens.Length);
-                legalForm = candidate.Key;
-                return true;
-            }
-
-            if (tokens.Count < candidate.Tokens.Length
-                || !candidate.Tokens.SequenceEqual(tokens.Skip(tokens.Count - candidate.Tokens.Length), StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            tokens.RemoveRange(tokens.Count - candidate.Tokens.Length, candidate.Tokens.Length);
-            legalForm = candidate.Key;
-            return true;
-        }
-
-        legalForm = "";
-        return false;
-    }
-
-    private static string CanonicalSubcontractorDisplayName(string legalForm, string baseName, string rawName)
-    {
-        if (string.IsNullOrWhiteSpace(baseName))
-        {
-            return CleanSubcontractorDisplayName(rawName) ?? "(Be subrangovo)";
-        }
-
-        var displayBase = string.Join(' ', baseName
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Select(DisplayCompanyToken));
-
-        return string.IsNullOrWhiteSpace(legalForm)
-            ? displayBase
-            : $"{legalForm} {displayBase}";
-    }
-
-    private static string DisplayCompanyToken(string token)
-    {
-        if (Regex.IsMatch(token, @"^\d+[A-Z0-9]*\.LT$", RegexOptions.IgnoreCase))
-        {
-            var prefix = token[..^3].ToLowerInvariant();
-            return $"{prefix}.LT";
-        }
-
-        if (token.Length <= 3 && token.All(char.IsLetter))
-        {
-            return token;
-        }
-
-        return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(token.ToLower(CultureInfo.CurrentCulture));
-    }
-
-    private static string NormalizeCompanyToken(string token)
-    {
-        if (!token.Contains('.')
-            && Regex.IsMatch(token, @"^(?=.*\d)[a-z0-9]+lt$", RegexOptions.IgnoreCase))
-        {
-            return $"{token[..^2]}.lt";
-        }
-
-        return token;
-    }
-
-    public static string? CleanSubcontractorDisplayName(string? value)
-    {
-        var text = CollapseWhitespace(value);
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return null;
-        }
-
-        var pipeIndex = text.IndexOf('|');
-        if (pipeIndex >= 0)
-        {
-            text = pipeIndex == 0 ? text[(pipeIndex + 1)..] : text[..pipeIndex];
-        }
-
-        text = CollapseWhitespace(text);
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return null;
-        }
-
-        return text.Trim();
-    }
-
-    public static string? CleanCustomerDisplayName(string? value)
-    {
-        var text = CollapseWhitespace(value);
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return null;
-        }
-
-        var pipeIndex = text.IndexOf('|');
-        if (pipeIndex >= 0)
-        {
-            text = pipeIndex == 0 ? "" : text[..pipeIndex];
-        }
-
-        text = CollapseWhitespace(text);
-        return string.IsNullOrWhiteSpace(text) ? null : text;
-    }
-
     private static string? NullIfWhiteSpace(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -2485,7 +2167,7 @@ public sealed class MonthlyFlowStore
 
     private static string LogicalContractKey(string projectCode, string objectNumber, string subcontractorName)
     {
-        return $"{NormalizeKeyPart(projectCode)}|{NormalizeKeyPart(objectNumber)}|{NormalizeSubcontractorName(subcontractorName)}";
+        return $"{NormalizeKeyPart(projectCode)}|{NormalizeKeyPart(objectNumber)}|{SubcontractorNormalizer.NormalizeSubcontractorName(subcontractorName)}";
     }
 
     public static ProjectObjectCode ParseProjectObjectCode(string? value)
@@ -2677,13 +2359,6 @@ public sealed record ProjectObjectCode(string ParentProjectCode, string ObjectNu
 
 public sealed record ConfiguredSubcontractorAlias(string? RawName, string? CanonicalName);
 
-public sealed record SubcontractorNameIdentity(
-    string RawName,
-    string CanonicalDisplayName,
-    string LegalForm,
-    string BaseName,
-    string NormalizedKey);
-
 public sealed record SubcontractorDiagnosticRow(
     string NormalizedKey,
     string CanonicalName,
@@ -2754,8 +2429,6 @@ public sealed record MonthlyAmount(int Year, int Month, decimal AmountWithoutVat
 public sealed record YearMonth(int Year, int Month);
 
 file sealed record InvoiceMatchKey(string ProjectCode, string ObjectNumber, string SubcontractorName, bool HasObjectNumber);
-
-public sealed record LegalFormPattern(string Key, string[] Tokens);
 
 sealed record ValidatedContractRow(
     string ProjectCode,
