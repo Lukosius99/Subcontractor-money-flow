@@ -4,6 +4,35 @@ Internal ASP.NET Core (.NET 10) app that tracks monthly subcontractor money flow
 It serves a static frontend from `wwwroot` and stores data in a SQLite database.
 In production it runs as a Windows service named **MoneyFlow** on **port 5000**.
 
+## Subrangos pinigų srauto 3D duomenų kelio schema
+
+➡️ **[Atidaryti interaktyvią 3D duomenų kelio schemą](https://lukosius99.github.io/Subcontractor-money-flow/subrangos-duomenu-kelias-3d/)**
+
+[![Subrangos pinigų srauto 3D schemos peržiūra](docs/subrangos-duomenu-kelias-3d/preview.png)](https://lukosius99.github.io/Subcontractor-money-flow/subrangos-duomenu-kelias-3d/)
+
+*Spustelėkite peržiūrą, kad atidarytumėte valdomą interaktyvią schemą GitHub Pages svetainėje.*
+
+Ši 3D dokumentacijos schema parodo, kaip mėnesiniai aktavimo duomenys ir sutartinės vertės keliauja nuo PADS SharePoint, DVS / DocLogix, Dynamics, SAP BO, DB SharePoint ir PAD iki lokalios API, SQLite duomenų bazės ir web sąsajos. Schema skirta dokumentacijai, todėl nėra rodoma pačioje gamybinėje programos sąsajoje. [Peržiūrėti jos šaltinio failus](docs/subrangos-duomenu-kelias-3d/).
+
+GitHub Pages svetainė automatiškai publikuojama iš `docs` aplanko. Repozitoriją taip pat galima parsisiųsti ir failą `docs/subrangos-duomenu-kelias-3d/index.html` atidaryti naršyklėje; 3D bibliotekai įkelti reikalingas interneto ryšys. Išorinių automatizacijų dalys pažymėtos „Pagal proceso aprašą“, kodo patvirtintos dalys pažymėtos „Patvirtinta kode“, o neaiškumai, įskaitant sutartinių duomenų skripto neatitikimą, pažymėti „Reikia patikrinti“.
+
+Vietinei peržiūrai komandą paleiskite iš repozitorijos pagrindinio aplanko:
+
+```powershell
+python -m http.server 8765 --directory ".\docs\subrangos-duomenu-kelias-3d"
+```
+
+Tada atidarykite [http://localhost:8765/](http://localhost:8765/).
+
+Jautrios reikšmės, API raktai, tokenai ir slaptažodžiai schemoje sąmoningai nerodomi.
+
+### Pastabos / tikrintini dalykai
+
+- Pateiktas contracted Office Script atrodo kaip mėnesinio srauto scriptas. Reikia patikrinti tikrą sutartinių verčių eksporto scriptą ir `/api/imports/contracts` laukiamą JSON formatą. Faktinė API laukia `rows` ir (arba) `projectValueRows`, ne mėnesinio `subranga` / `SMD` formato.
+- Pagal proceso aprašą PAD sėkme laiko tik statusą `200`; verta patikrinti, ar neturėtų būti priimami ir kiti `2xx` atsakymai.
+- PAD užklausa turi siųsti JSON kūną su `Content-Type: application/json`. API raktai dokumentacijoje nerodomi.
+- Eilutės be objekto kodo praleidžiamos, todėl importo perspėjimus reikia stebėti.
+
 ---
 
 ## Deploy on a new computer (the easy way)
