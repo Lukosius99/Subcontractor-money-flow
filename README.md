@@ -12,8 +12,8 @@ Vidinė įmonės LAN programa subrangovų mėnesiniams pinigų srautams stebėti
 2. Išskleiskite visą ZIP failą, pavyzdžiui, į `C:\Temp\Subcontractor-money-flow`. Scenarijaus neleiskite tiesiai iš ZIP lango.
 3. Įdiekite [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), jei jo nėra.
 4. Išskleistame aplanke dešiniuoju pelės mygtuku spauskite `Deploy-MoneyFlow.ps1` ir pasirinkite **Run with PowerShell**. Patvirtinkite administratoriaus teisių langą.
-5. Įveskite PAD / Cloud Flow importo API raktą. Jo neviešinkite ir neįrašykite į repo.
-6. Palaukite pranešimo **DIEGIMAS BAIGTAS SĖKMINGAI**.
+5. Palaukite pranešimo **DIEGIMAS BAIGTAS SĖKMINGAI**.
+6. Po administratoriaus diegimo paprastas vartotojas paleidžia `C:\Program Files\PADS\MoneyFlow\Set-MoneyFlowApiKey.ps1`, įklijuoja PAD / Cloud Flow API raktą ir spaudžia Enter. Administratoriaus teisių tam nereikia, o paslaugos perkrauti nereikia.
 7. Serveryje atidarykite [http://localhost:5000](http://localhost:5000).
 
 Jei Windows nerodo **Run with PowerShell**, atidarykite PowerShell tame aplanke ir vykdykite:
@@ -48,6 +48,16 @@ Start-Service MoneyFlow
 Stop-Service MoneyFlow
 Restart-Service MoneyFlow
 ```
+
+## API rakto nustatymas be administratoriaus teisių
+
+Administratorius vieną kartą įdiegia programą. Po to paprastas vietinis Windows vartotojas gali paleisti:
+
+```powershell
+& "C:\Program Files\PADS\MoneyFlow\Set-MoneyFlowApiKey.ps1"
+```
+
+Raktas rašant nerodomas. Jis laikomas `C:\ProgramData\PADS\MoneyFlow\Configuration\api-key.txt`, o programa jį perskaito nuo kitos importo užklausos. Jei raktas dar nenustatytas, programa veikia, tačiau importo API saugiai grąžina klaidą ir nepriima neapsaugotų importų.
 
 ## Ką perduoti tinklo administratoriui
 

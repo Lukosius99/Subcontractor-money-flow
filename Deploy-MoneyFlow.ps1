@@ -34,6 +34,7 @@ $stagingDirectory = Join-Path $env:TEMP ("MoneyFlow-publish-{0}" -f [guid]::NewG
 $dataDirectory = Join-Path $env:ProgramData 'PADS\MoneyFlow'
 $liveDatabase = Join-Path $dataDirectory 'monthly-money-flow.db'
 $backupDirectory = Join-Path $dataDirectory 'Backups'
+$configurationDirectory = Join-Path $dataDirectory 'Configuration'
 $serviceName = 'MoneyFlow'
 $serviceRegistryKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName"
 $firewallRuleName = 'MoneyFlow LAN (TCP 5000)'
@@ -60,22 +61,6 @@ Write-Host '[GERAI] .NET 10 SDK rastas.' -ForegroundColor Green
 
 $existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 
-# Keep the existing import key on updates. On first install, accept a machine
-# environment value or ask for one without echoing it to the screen.
-$apiKey = $env:MONEY_FLOW_API_KEY
-if ([string]::IsNullOrWhiteSpace($apiKey) -and (Test-Path -LiteralPath $serviceRegistryKey)) {
-    $serviceEnvironment = (Get-ItemProperty -LiteralPath $serviceRegistryKey -Name Environment -ErrorAction SilentlyContinue).Environment
-    $keySetting = @($serviceEnvironment) | Where-Object { $_ -like 'MONEY_FLOW_API_KEY=*' } | Select-Object -First 1
-    if ($keySetting) { $apiKey = $keySetting.Substring('MONEY_FLOW_API_KEY='.Length) }
-}
-if ([string]::IsNullOrWhiteSpace($apiKey)) {
-    $secureKey = Read-Host 'Įveskite PAD / Cloud Flow importo API raktą' -AsSecureString
-    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureKey)
-    try { $apiKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
-    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
-}
-if ([string]::IsNullOrWhiteSpace($apiKey)) { Stop-WithError 'Production aplinkai būtinas importo API raktas.' }
-
 if ($existingService -and $existingService.Status -ne 'Stopped') {
     Write-Step 'Esamos paslaugos stabdymas'
     Stop-Service -Name $serviceName
@@ -88,7 +73,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish baigė darbą su kodu $LASTEXITCODE" }
     $stagedExe = Join-Path $stagingDirectory 'PADS.MoneyFlow.Api.exe'
     if (-not (Test-Path -LiteralPath $stagedExe)) { throw "Publikavimo aplanke nerastas $stagedExe" }
-    foreach ($requiredFile in @('appsettings.json', 'appsettings.Production.json', 'wwwroot\index.html')) {
+    foreach ($requiredFile in @('appsettings.json', 'appsettings.Production.json', 'Set-MoneyFlowApiKey.ps1', 'wwwroot\index.html')) {
         if (-not (Test-Path -LiteralPath (Join-Path $stagingDirectory $requiredFile))) {
             throw "Publikavimo rezultate nerastas būtinas failas: $requiredFile"
         }
@@ -101,6 +86,26 @@ try {
 
     Write-Step 'Duomenų bazės paruošimas'
     New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
+    New-Item -ItemType Directory -Path $configurationDirectory -Force | Out-Null
+
+    # A normal local user may update only this configuration folder. The app
+    # reads the key file dynamically, so changing it needs no service restart.
+    $acl = New-Object Security.AccessControl.DirectorySecurity
+    $acl.SetAccessRuleProtection($true, $false)
+    $inheritance = [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+    $propagation = [Security.AccessControl.PropagationFlags]::None
+    $allow = [Security.AccessControl.AccessControlType]::Allow
+    $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
+        (New-Object Security.Principal.SecurityIdentifier('S-1-5-18')),
+        [Security.AccessControl.FileSystemRights]::FullControl, $inheritance, $propagation, $allow)))
+    $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
+        (New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')),
+        [Security.AccessControl.FileSystemRights]::FullControl, $inheritance, $propagation, $allow)))
+    $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
+        (New-Object Security.Principal.SecurityIdentifier('S-1-5-32-545')),
+        [Security.AccessControl.FileSystemRights]::Modify, $inheritance, $propagation, $allow)))
+    Set-Acl -LiteralPath $configurationDirectory -AclObject $acl
+    Write-Host '[GERAI] Paruoštas API rakto aplankas ne administratoriaus scenarijui.' -ForegroundColor Green
     if (Test-Path -LiteralPath $liveDatabase) {
         if ($ReplaceDatabase) {
             New-Item -ItemType Directory -Path $backupDirectory -Force | Out-Null
@@ -128,8 +133,7 @@ try {
     }
     New-ItemProperty -LiteralPath $serviceRegistryKey -Name Environment -PropertyType MultiString -Force -Value @(
         'ASPNETCORE_ENVIRONMENT=Production',
-        'ASPNETCORE_URLS=http://0.0.0.0:5000',
-        "MONEY_FLOW_API_KEY=$apiKey"
+        'ASPNETCORE_URLS=http://0.0.0.0:5000'
     ) | Out-Null
     & sc.exe failure $serviceName reset= 86400 actions= restart/5000/restart/15000/''/0 | Out-Null
 
@@ -160,6 +164,9 @@ try {
     Write-Host "  http://${computerName}:5000"
     foreach ($ip in $lanIps) { Write-Host "  http://${ip}:5000" }
     Write-Host "`nktpads.lt nustatymus turi atlikti tinklo administratorius (žr. DEPLOYMENT.md)." -ForegroundColor Cyan
+    if (-not (Test-Path -LiteralPath (Join-Path $configurationDirectory 'api-key.txt'))) {
+        Write-Host "`nKITAS ŽINGSNIS: paprastas vartotojas turi paleisti Set-MoneyFlowApiKey.ps1." -ForegroundColor Yellow
+    }
 }
 catch {
     Write-Host "`nKLAIDA: $($_.Exception.Message)" -ForegroundColor Red

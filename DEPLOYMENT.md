@@ -19,10 +19,24 @@ Programa nepriklauso nuo PowerShell esamo aplanko: konfigūracija publikuojama k
 2. Išskleiskite visą ZIP.
 3. Įdiekite **.NET 10 SDK**. Scenarijus publikuoja kodą serveryje, todėl vien Runtime nepakanka.
 4. Paleiskite `Deploy-MoneyFlow.ps1`. Jis pats paprašys administratoriaus teisių.
-5. Įveskite slaptą PAD / Cloud Flow API raktą. Atnaujinant jis išsaugomas paslaugos konfigūracijoje ir dar kartą neprašomas.
-6. Scenarijus publikuoja į laikiną aplanką, sustabdo seną paslaugą, pakeičia tik programos failus, įdiegia arba atnaujina paslaugą ir ją paleidžia.
+5. Scenarijus publikuoja į laikiną aplanką, sustabdo seną paslaugą, pakeičia tik programos failus, įdiegia arba atnaujina paslaugą ir ją paleidžia.
+6. Po diegimo paprastas vietinis vartotojas paleidžia `C:\Program Files\PADS\MoneyFlow\Set-MoneyFlowApiKey.ps1` ir įveda slaptą PAD / Cloud Flow API raktą. Administratoriaus teisių ir paslaugos perkrovimo nereikia.
 7. Jei gyvos DB nėra, `seed\monthly-money-flow.db` nukopijuojama į `ProgramData`. Jei DB jau yra, ji neperrašoma.
 8. Patikrinamas `http://localhost:5000` ir parodomi kompiuterio bei LAN IP adresai.
+
+## API rakto nustatymas be administratoriaus teisių
+
+Administratorius diegimo metu sukuria tik vieną paprastiems vietiniams vartotojams keičiamą aplanką:
+
+`C:\ProgramData\PADS\MoneyFlow\Configuration`
+
+Vartotojas paleidžia:
+
+```powershell
+& "C:\Program Files\PADS\MoneyFlow\Set-MoneyFlowApiKey.ps1"
+```
+
+Raktas išsaugomas `api-key.txt`. Programa tikrina failą kiekvienos importo užklausos metu, todėl paslaugos perkrauti nereikia. Kol rakto nėra, svetainės skaitymo funkcijos veikia, tačiau `POST /api/imports/*` grąžina `503` ir importas nevykdomas. Vietiniai vartotojai, turintys šio aplanko keitimo teisę, gali perskaityti arba pakeisti raktą; LAN vartotojams failų sistemos teisė nesuteikiama.
 
 ## Atnaujinimas neprarandant duomenų
 
