@@ -1,149 +1,175 @@
-﻿# Deploy-MoneyFlow.ps1 — One-click deploy for the PADS MoneyFlow app
-# ---------------------------------------------------------------------------
-# Run this ONCE on a fresh machine after cloning/downloading the repo:
-#   Right-click  ->  Run with PowerShell   (it will request Administrator)
-#
-# What it does, in order:
-#   1. Re-launches itself elevated if needed (service install requires admin).
-#   2. Verifies the .NET 10 SDK is installed.
-#   3. Publishes the app (Release) into  <repo>\publish .
-#   4. Ensures C:\ProgramData\PADS\MoneyFlow exists and, ONLY if no database is
-#      already there, restores the bundled snapshot from  <repo>\seed .
-#      => Re-running on a machine that already has data never overwrites it.
-#   5. Installs (or updates) the "MoneyFlow" Windows service pointing at the
-#      published exe, with ASPNETCORE_ENVIRONMENT=Production so it binds
-#      port 5000 and uses the ProgramData database.
-#   6. Starts the service and verifies http://localhost:5000 responds.
-# ---------------------------------------------------------------------------
+[CmdletBinding()]
+param(
+    [switch]$ReplaceDatabase
+)
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
 
-# --- 1. Elevate to Administrator -------------------------------------------
-$isAdmin = ([Security.Principal.WindowsPrincipal] `
-    [Security.Principal.WindowsIdentity]::GetCurrent()
-    ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+function Write-Step([string]$Message) { Write-Host "`n==> $Message" -ForegroundColor Cyan }
+function Stop-WithError([string]$Message) {
+    Write-Host "`nKLAIDA: $Message" -ForegroundColor Red
+    Write-Host "Diegimas nebaigtas. Pagalba: DEPLOYMENT.md" -ForegroundColor Yellow
+    Read-Host 'Paspauskite Enter, kad uždarytumėte'
+    exit 1
+}
 
+# The script works both from a Git clone and from an extracted GitHub ZIP.
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+    [Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
-    Write-Host "Requesting Administrator rights..." -ForegroundColor Yellow
-    Start-Process powershell.exe `
-        -Verb RunAs `
-        -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
+    if ($ReplaceDatabase) { $arguments += '-ReplaceDatabase' }
+    Write-Host 'Prašoma administratoriaus teisių...' -ForegroundColor Yellow
+    Start-Process powershell.exe -Verb RunAs -ArgumentList $arguments
     exit
 }
 
-$RepoRoot   = $PSScriptRoot
-$PublishDir = Join-Path $RepoRoot "publish"
-$Csproj     = Join-Path $RepoRoot "PADS.MoneyFlow.Api.csproj"
-$ExePath    = Join-Path $PublishDir "PADS.MoneyFlow.Api.exe"
+$repoRoot = $PSScriptRoot
+$projectFile = Join-Path $repoRoot 'PADS.MoneyFlow.Api.csproj'
+$seedDatabase = Join-Path $repoRoot 'seed\monthly-money-flow.db'
+$installDirectory = Join-Path $env:ProgramFiles 'PADS\MoneyFlow'
+$executable = Join-Path $installDirectory 'PADS.MoneyFlow.Api.exe'
+$stagingDirectory = Join-Path $env:TEMP ("MoneyFlow-publish-{0}" -f [guid]::NewGuid().ToString('N'))
+$dataDirectory = Join-Path $env:ProgramData 'PADS\MoneyFlow'
+$liveDatabase = Join-Path $dataDirectory 'monthly-money-flow.db'
+$backupDirectory = Join-Path $dataDirectory 'Backups'
+$serviceName = 'MoneyFlow'
+$serviceRegistryKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName"
+$firewallRuleName = 'MoneyFlow LAN (TCP 5000)'
 
-$ServiceName = "MoneyFlow"
-$DisplayName = "PADS Monthly Money Flow"
-$Description  = "Monthly Money Flow internal finance tracker"
+if (-not (Test-Path -LiteralPath $projectFile)) { Stop-WithError "Nerastas projektas: $projectFile" }
+if (-not (Test-Path -LiteralPath $seedDatabase)) { Stop-WithError "Nerasta pradinė duomenų bazė: $seedDatabase" }
+if ((Get-Item -LiteralPath $seedDatabase).Length -eq 0) { Stop-WithError 'Pradinė duomenų bazė yra tuščias failas.' }
 
-$DataDir = "C:\ProgramData\PADS\MoneyFlow"
-$DbFile  = Join-Path $DataDir "monthly-money-flow.db"
-$SeedDb  = Join-Path $RepoRoot "seed\monthly-money-flow.db"
+Write-Host 'MoneyFlow diegimas' -ForegroundColor Green
+Write-Host "Programa: $installDirectory"
+Write-Host "Duomenys: $liveDatabase"
 
-Write-Host "MoneyFlow deploy starting" -ForegroundColor Cyan
-Write-Host "  Repo:    $RepoRoot"
-Write-Host "  Publish: $PublishDir"
-Write-Host ""
-
-# --- 2. Verify .NET 10 SDK --------------------------------------------------
-$dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
-if ($null -eq $dotnet) {
-    Write-Host "ERROR: .NET SDK not found." -ForegroundColor Red
-    Write-Host "Install the .NET 10 SDK from https://dotnet.microsoft.com/download/dotnet/10.0 then re-run." -ForegroundColor Yellow
-    Read-Host "Press Enter to close"; exit 1
+Write-Step '.NET 10 SDK tikrinimas'
+$dotnet = Get-Command dotnet.exe -ErrorAction SilentlyContinue
+if (-not $dotnet) {
+    Stop-WithError 'Nerastas .NET 10 SDK. Įdiekite jį iš https://dotnet.microsoft.com/download/dotnet/10.0'
 }
-$hasNet10 = (& dotnet --list-sdks) | Where-Object { $_ -like "10.*" }
-if (-not $hasNet10) {
-    Write-Host "ERROR: .NET 10 SDK is required but not installed." -ForegroundColor Red
-    Write-Host "Installed SDKs:" -ForegroundColor Yellow
+$hasRequiredSdk = @(& dotnet --list-sdks) | Where-Object { $_ -match '^10\.' }
+if (-not $hasRequiredSdk) {
     & dotnet --list-sdks
-    Write-Host "Get .NET 10 from https://dotnet.microsoft.com/download/dotnet/10.0 then re-run." -ForegroundColor Yellow
-    Read-Host "Press Enter to close"; exit 1
+    Stop-WithError 'Reikalingas .NET 10 SDK (vien Runtime nepakanka, nes programa publikuojama šiame kompiuteryje).'
 }
-Write-Host "[OK] .NET 10 SDK present." -ForegroundColor Green
+Write-Host '[GERAI] .NET 10 SDK rastas.' -ForegroundColor Green
 
-# --- Stop the service first so the publish target isn't locked --------------
-$existing = Get-Service $ServiceName -ErrorAction SilentlyContinue
-if ($null -ne $existing -and $existing.Status -ne "Stopped") {
-    Write-Host "Stopping existing '$ServiceName' service so files can be replaced..." -ForegroundColor Yellow
-    Stop-Service $ServiceName
-    (Get-Service $ServiceName).WaitForStatus("Stopped", "00:00:30")
+$existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+
+# Keep the existing import key on updates. On first install, accept a machine
+# environment value or ask for one without echoing it to the screen.
+$apiKey = $env:MONEY_FLOW_API_KEY
+if ([string]::IsNullOrWhiteSpace($apiKey) -and (Test-Path -LiteralPath $serviceRegistryKey)) {
+    $serviceEnvironment = (Get-ItemProperty -LiteralPath $serviceRegistryKey -Name Environment -ErrorAction SilentlyContinue).Environment
+    $keySetting = @($serviceEnvironment) | Where-Object { $_ -like 'MONEY_FLOW_API_KEY=*' } | Select-Object -First 1
+    if ($keySetting) { $apiKey = $keySetting.Substring('MONEY_FLOW_API_KEY='.Length) }
 }
-
-# --- 3. Publish -------------------------------------------------------------
-Write-Host "Publishing (Release)..." -ForegroundColor Cyan
-& dotnet publish $Csproj -c Release -o $PublishDir
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: dotnet publish failed." -ForegroundColor Red
-    Read-Host "Press Enter to close"; exit 1
+if ([string]::IsNullOrWhiteSpace($apiKey)) {
+    $secureKey = Read-Host 'Įveskite PAD / Cloud Flow importo API raktą' -AsSecureString
+    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureKey)
+    try { $apiKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
 }
-if (-not (Test-Path $ExePath)) {
-    Write-Host "ERROR: expected exe not found at $ExePath" -ForegroundColor Red
-    Read-Host "Press Enter to close"; exit 1
-}
-Write-Host "[OK] Published to $PublishDir" -ForegroundColor Green
+if ([string]::IsNullOrWhiteSpace($apiKey)) { Stop-WithError 'Production aplinkai būtinas importo API raktas.' }
 
-# --- 4. Data: create dir, restore seed ONLY if no DB exists -----------------
-if (-not (Test-Path $DataDir)) {
-    New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
-}
-if (Test-Path $DbFile) {
-    Write-Host "[OK] Existing database found at $DbFile — left untouched (your data is safe)." -ForegroundColor Green
-} else {
-    if (Test-Path $SeedDb) {
-        Copy-Item $SeedDb $DbFile
-        Write-Host "[OK] Restored bundled database snapshot to $DbFile" -ForegroundColor Green
-    } else {
-        Write-Host "WARNING: no existing DB and no seed snapshot found — app will start with an empty database." -ForegroundColor Yellow
-    }
-}
-
-# --- 5. Install / update the Windows service --------------------------------
-if ($null -eq $existing) {
-    Write-Host "Installing '$ServiceName' service..." -ForegroundColor Cyan
-    New-Service -Name $ServiceName `
-                -BinaryPathName "`"$ExePath`"" `
-                -DisplayName $DisplayName `
-                -Description $Description `
-                -StartupType Automatic | Out-Null
-} else {
-    Write-Host "Updating existing '$ServiceName' service binary path..." -ForegroundColor Cyan
-    & sc.exe config $ServiceName binPath= "`"$ExePath`"" start= auto | Out-Null
-}
-
-# Set ASPNETCORE_ENVIRONMENT=Production for THIS service only (service-scoped,
-# does not pollute machine-wide env). Required so appsettings.Production.json
-# is applied (port 5000 + the ProgramData database path).
-$svcKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName"
-New-ItemProperty -Path $svcKey -Name "Environment" `
-    -Value @("ASPNETCORE_ENVIRONMENT=Production") `
-    -PropertyType MultiString -Force | Out-Null
-Write-Host "[OK] Service configured (ASPNETCORE_ENVIRONMENT=Production)." -ForegroundColor Green
-
-# --- 6. Start + verify ------------------------------------------------------
-Write-Host "Starting service..." -ForegroundColor Cyan
-Start-Service $ServiceName
-Start-Sleep -Seconds 4
-
-$status = (Get-Service $ServiceName).Status
-if ($status -ne "Running") {
-    Write-Host "ERROR: service did not start (status: $status). Check Event Viewer." -ForegroundColor Red
-    Read-Host "Press Enter to close"; exit 1
+if ($existingService -and $existingService.Status -ne 'Stopped') {
+    Write-Step 'Esamos paslaugos stabdymas'
+    Stop-Service -Name $serviceName
+    (Get-Service -Name $serviceName).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
 }
 
 try {
-    $resp = Invoke-WebRequest -Uri "http://localhost:5000" -UseBasicParsing -TimeoutSec 10
-    Write-Host ""
-    Write-Host "SUCCESS — MoneyFlow is running. HTTP $($resp.StatusCode) from http://localhost:5000" -ForegroundColor Green
-} catch {
-    Write-Host "Service is running but http://localhost:5000 did not respond yet." -ForegroundColor Yellow
-    Write-Host "Give it a few seconds and open http://localhost:5000 in a browser." -ForegroundColor Yellow
+    Write-Step 'Programos publikavimas'
+    & dotnet publish $projectFile -c Release -o $stagingDirectory --nologo
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish baigė darbą su kodu $LASTEXITCODE" }
+    $stagedExe = Join-Path $stagingDirectory 'PADS.MoneyFlow.Api.exe'
+    if (-not (Test-Path -LiteralPath $stagedExe)) { throw "Publikavimo aplanke nerastas $stagedExe" }
+    foreach ($requiredFile in @('appsettings.json', 'appsettings.Production.json', 'wwwroot\index.html')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $stagingDirectory $requiredFile))) {
+            throw "Publikavimo rezultate nerastas būtinas failas: $requiredFile"
+        }
+    }
+
+    New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+    Get-ChildItem -LiteralPath $installDirectory -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+    Copy-Item -Path (Join-Path $stagingDirectory '*') -Destination $installDirectory -Recurse -Force
+    Write-Host "[GERAI] Programa įdiegta į $installDirectory" -ForegroundColor Green
+
+    Write-Step 'Duomenų bazės paruošimas'
+    New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
+    if (Test-Path -LiteralPath $liveDatabase) {
+        if ($ReplaceDatabase) {
+            New-Item -ItemType Directory -Path $backupDirectory -Force | Out-Null
+            $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+            $backup = Join-Path $backupDirectory "monthly-money-flow-before-replace-$stamp.db"
+            Copy-Item -LiteralPath $liveDatabase -Destination $backup -Force
+            Copy-Item -LiteralPath $seedDatabase -Destination $liveDatabase -Force
+            Write-Host "[GERAI] Senoji DB išsaugota: $backup" -ForegroundColor Green
+            Write-Host '[GERAI] DB tyčia pakeista repo pradine kopija.' -ForegroundColor Green
+        } else {
+            Write-Host '[GERAI] Esama DB palikta nepakeista.' -ForegroundColor Green
+        }
+    } else {
+        Copy-Item -LiteralPath $seedDatabase -Destination $liveDatabase -Force
+        Write-Host '[GERAI] Pirmo diegimo DB atkurta iš seed\monthly-money-flow.db.' -ForegroundColor Green
+    }
+
+    Write-Step 'Windows paslaugos konfigūravimas'
+    if (-not $existingService) {
+        New-Service -Name $serviceName -BinaryPathName "`"$executable`"" -DisplayName 'MoneyFlow' `
+            -Description 'PADS subcontractor money-flow application' -StartupType Automatic | Out-Null
+    } else {
+        & sc.exe config $serviceName binPath= "`"$executable`"" start= auto | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Nepavyko atnaujinti Windows paslaugos.' }
+    }
+    New-ItemProperty -LiteralPath $serviceRegistryKey -Name Environment -PropertyType MultiString -Force -Value @(
+        'ASPNETCORE_ENVIRONMENT=Production',
+        'ASPNETCORE_URLS=http://0.0.0.0:5000',
+        "MONEY_FLOW_API_KEY=$apiKey"
+    ) | Out-Null
+    & sc.exe failure $serviceName reset= 86400 actions= restart/5000/restart/15000/''/0 | Out-Null
+
+    Write-Step 'Windows užkardos taisyklės konfigūravimas'
+    Get-NetFirewallRule -DisplayName $firewallRuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+    New-NetFirewallRule -DisplayName $firewallRuleName -Direction Inbound -Action Allow -Protocol TCP `
+        -LocalPort 5000 -Profile Domain,Private | Out-Null
+    Write-Host '[GERAI] TCP 5000 leidžiamas Domain ir Private tinkluose.' -ForegroundColor Green
+
+    Write-Step 'Paslaugos paleidimas ir patikra'
+    Start-Service -Name $serviceName
+    (Get-Service -Name $serviceName).WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
+    $response = $null
+    for ($attempt = 1; $attempt -le 10 -and -not $response; $attempt++) {
+        try { $response = Invoke-WebRequest -Uri 'http://localhost:5000' -UseBasicParsing -TimeoutSec 5 }
+        catch { if ($attempt -lt 10) { Start-Sleep -Seconds 2 } }
+    }
+    if (-not $response -or $response.StatusCode -lt 200 -or $response.StatusCode -ge 400) {
+        throw 'Paslauga paleista, bet http://localhost:5000 neatsakė sėkmingai.'
+    }
+
+    $computerName = $env:COMPUTERNAME
+    $lanIps = @(Get-NetIPAddress -AddressFamily IPv4 -AddressState Preferred -ErrorAction SilentlyContinue |
+        Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
+        Select-Object -ExpandProperty IPAddress -Unique)
+    Write-Host "`nDIEGIMAS BAIGTAS SĖKMINGAI" -ForegroundColor Green
+    Write-Host '  http://localhost:5000'
+    Write-Host "  http://${computerName}:5000"
+    foreach ($ip in $lanIps) { Write-Host "  http://${ip}:5000" }
+    Write-Host "`nktpads.lt nustatymus turi atlikti tinklo administratorius (žr. DEPLOYMENT.md)." -ForegroundColor Cyan
+}
+catch {
+    Write-Host "`nKLAIDA: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Paslaugos būsena: $((Get-Service -Name $serviceName -ErrorAction SilentlyContinue).Status)" -ForegroundColor Yellow
+    Write-Host 'Žr. DEPLOYMENT.md trikčių šalinimo skyrių.' -ForegroundColor Yellow
+    Read-Host 'Paspauskite Enter, kad uždarytumėte'
+    exit 1
+}
+finally {
+    Remove-Item -LiteralPath $stagingDirectory -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host ""
-Write-Host "Open http://localhost:5000 to use the app." -ForegroundColor Cyan
-Read-Host "Press Enter to close"
+Read-Host 'Paspauskite Enter, kad uždarytumėte'

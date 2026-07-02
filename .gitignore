@@ -9,6 +9,14 @@ data/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+*.db-wal
+*.db-shm
+*.db-journal
+*.log
+logs/
+*.tmp
+*.bak
+*.zip
 
 # Throwaway dev/test fixtures and logs (~48 MB, not needed to run the app)
 test-data/
@@ -18,6 +26,13 @@ test-data/*store*.json
 .vs/
 *.user
 .claude/
+.idea/
+.vscode/
+
+# Local imports and exports can contain company data
+imports/
+temp/
+tmp/
 
 # NOTE: seed/monthly-money-flow.db IS tracked on purpose — it is the bundled
 # initial dataset the deploy script restores on a fresh machine.
