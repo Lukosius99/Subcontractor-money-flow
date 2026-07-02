@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="lt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interaktyvi subrangos pinigų srauto 3D duomenų kelio dokumentacijos schema.">
+  <title>Subrangos pinigų srauto 3D schema</title>
+  <link rel="stylesheet" href="styles.css?v=20260701-orbit-controls">
+</head>
+<body>
+  <main id="mapShell">
+    <header class="topbar">
+      <div class="identity">
+        <span class="pulse-mark" aria-hidden="true"></span>
+        <div>
+          <p class="eyebrow">PADS proceso dokumentacija</p>
+          <h1>Subrangos pinigų srautas</h1>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button id="tourButton" class="primary-button" type="button">Paleisti duomenų kelio turą</button>
+        <button id="resetButton" class="reset-button" type="button" aria-label="Atstatyti vaizdą"><span aria-hidden="true">↺</span> Atstatyti vaizdą</button>
+      </div>
+    </header>
+
+    <section class="control-deck" aria-label="Žemėlapio valdymas">
+      <label class="search-field">
+        <span class="visually-hidden">Ieškoti schemoje</span>
+        <span aria-hidden="true">⌕</span>
+        <input id="searchInput" type="search" placeholder="Ieškoti mazgo, lauko ar sistemos…" autocomplete="off">
+        <kbd>Ctrl K</kbd>
+      </label>
+      <div id="filters" class="filters" aria-label="Rodymo filtrai">
+        <button class="filter is-active" data-filter="all" type="button">Visa schema</button>
+        <button class="filter" data-filter="monthly" type="button">Rodyti mėnesinį kelią</button>
+        <button class="filter" data-filter="contracts" type="button">Rodyti sutartinių verčių kelią</button>
+        <button class="filter" data-filter="bridge" type="button">Rodyti PAD/API kelią</button>
+      </div>
+      <label class="technical-toggle">
+        <input id="technicalToggle" type="checkbox">
+        <span>Rodyti techninius mazgus</span>
+      </label>
+    </section>
+
+    <section class="stage" aria-label="Interaktyvi 3D duomenų schema">
+      <div id="graph" role="application" aria-label="3D žemėlapis. Sukite pele, priartinkite ratuku, pasirinkite mazgą spustelėdami."></div>
+      <div id="nodeLabels" class="node-labels" aria-label="Pagrindinių mazgų etiketės"></div>
+      <div class="scene-caption">
+        <span><b id="visibleCount">0</b> matomų mazgų</span>
+        <span class="divider"></span>
+        <span>Tempkite, kad suktumėte</span>
+        <span>Dešinys tempimas, kad pastumtumėte</span>
+        <span>Ratukas, kad priartintumėte</span>
+      </div>
+      <div id="loadingState" class="loading-state">
+        <span class="loader"></span>
+        <p>Kuriama 3D duomenų erdvė…</p>
+      </div>
+      <div id="libraryError" class="library-error" hidden>
+        <strong>Nepavyko įkelti 3D bibliotekos.</strong>
+        <span>Patikrinkite interneto ryšį ir perkraukite puslapį.</span>
+      </div>
+    </section>
+
+    <aside id="detailPanel" class="detail-panel" aria-live="polite" aria-label="Pasirinkto mazgo informacija">
+      <button id="closePanel" class="close-button" type="button" aria-label="Uždaryti informaciją">×</button>
+      <div id="detailEmpty" class="detail-empty">
+        <span class="orbit-glyph" aria-hidden="true">◎</span>
+        <h2>Pasirinkite mazgą</h2>
+        <p>Spustelėkite bet kurį tašką, kad pamatytumėte verslo paaiškinimą, technines detales ir informacijos šaltinį.</p>
+      </div>
+      <div id="detailContent" hidden>
+        <div id="detailBadges" class="badges"></div>
+        <p id="detailGroup" class="detail-group"></p>
+        <h2 id="detailTitle"></h2>
+        <p id="detailDescription" class="detail-description"></p>
+        <section id="technicalSection" class="technical-section">
+          <h3>Techninės detalės</h3>
+          <div id="detailTechnical"></div>
+        </section>
+        <section class="source-section">
+          <h3>Informacijos būsena</h3>
+          <p id="detailSource"></p>
+        </section>
+      </div>
+    </aside>
+
+    <footer class="legend" aria-label="Spalvų legenda">
+      <span><i style="--dot:#4e9cff"></i>Mėnesinis aktavimas</span>
+      <span><i style="--dot:#3fd18c"></i>Sutartinės vertės</span>
+      <span><i style="--dot:#a67cff"></i>Automatizacijos</span>
+      <span><i style="--dot:#ff9b54"></i>PAD ir API</span>
+      <span><i style="--dot:#8792a8"></i>Išorinės sistemos</span>
+    </footer>
+  </main>
+
+  <script src="https://unpkg.com/3d-force-graph@1.79.0/dist/3d-force-graph.min.js"></script>
+  <script src="data-flow-graph.js?v=20260701-hub-lower-left"></script>
+</body>
+</html>
