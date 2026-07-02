@@ -8,6 +8,10 @@ In production it runs as a Windows service named **MoneyFlow** on **port 5000**.
 
 ➡️ **[Atidaryti interaktyvią 3D duomenų kelio schemą](https://lukosius99.github.io/Subcontractor-money-flow/subrangos-duomenu-kelias-3d/)**
 
+[![Subrangos pinigų srauto 3D schemos peržiūra](docs/subrangos-duomenu-kelias-3d/preview.png)](https://lukosius99.github.io/Subcontractor-money-flow/subrangos-duomenu-kelias-3d/)
+
+*Spustelėkite peržiūrą, kad atidarytumėte valdomą interaktyvią schemą GitHub Pages svetainėje.*
+
 Ši 3D dokumentacijos schema parodo, kaip mėnesiniai aktavimo duomenys ir sutartinės vertės keliauja nuo PADS SharePoint, DVS / DocLogix, Dynamics, SAP BO, DB SharePoint ir PAD iki lokalios API, SQLite duomenų bazės ir web sąsajos. Schema skirta dokumentacijai, todėl nėra rodoma pačioje gamybinėje programos sąsajoje. [Peržiūrėti jos šaltinio failus](docs/subrangos-duomenu-kelias-3d/).
 
 GitHub Pages svetainė automatiškai publikuojama iš `docs` aplanko. Repozitoriją taip pat galima parsisiųsti ir failą `docs/subrangos-duomenu-kelias-3d/index.html` atidaryti naršyklėje; 3D bibliotekai įkelti reikalingas interneto ryšys. Išorinių automatizacijų dalys pažymėtos „Pagal proceso aprašą“, kodo patvirtintos dalys pažymėtos „Patvirtinta kode“, o neaiškumai, įskaitant sutartinių duomenų skripto neatitikimą, pažymėti „Reikia patikrinti“.
