@@ -45,22 +45,16 @@ builder.Services.AddDbContextFactory<MoneyFlowDbContext>(options =>
     options.UseSqlite($"Data Source={databasePath};Default Timeout=30"));
 builder.Services.AddSingleton<MonthlyFlowStore>();
 builder.Services.AddSingleton<MonthlyFlowImportService>();
-
-// API key for write endpoints (imports + deletes). Resolved from, in order:
-//   1. MoneyFlow:ApiKey in appsettings / MoneyFlow__ApiKey env var.
-//   2. MONEY_FLOW_API_KEY environment variable.
-// Leave unset and the check is disabled (warned at startup) so the app keeps
-// working until the key is configured; once set, write endpoints require it.
-var apiKey = builder.Configuration["MoneyFlow:ApiKey"]
-    ?? Environment.GetEnvironmentVariable("MONEY_FLOW_API_KEY");
+builder.Services.AddSingleton<ApiKeyProvider>();
 
 var app = builder.Build();
 
-if (string.IsNullOrWhiteSpace(apiKey))
+var apiKeyProvider = app.Services.GetRequiredService<ApiKeyProvider>();
+if (string.IsNullOrWhiteSpace(apiKeyProvider.GetApiKey()))
 {
     app.Logger.LogWarning(
-        "MoneyFlow API key is not configured. Import and delete endpoints are UNPROTECTED. " +
-        "Set the MONEY_FLOW_API_KEY environment variable to require a key.");
+        "MoneyFlow API key is not configured. Import endpoints will reject requests until " +
+        "Set-MoneyFlowApiKey.ps1 is run.");
 }
 
 await app.Services.GetRequiredService<MonthlyFlowStore>()
@@ -91,8 +85,16 @@ app.Use(async (context, next) =>
     var isImport = context.Request.Path.StartsWithSegments("/api/imports")
         && HttpMethods.IsPost(context.Request.Method);
 
-    if (isImport && !string.IsNullOrWhiteSpace(apiKey))
+    if (isImport)
     {
+        var apiKey = apiKeyProvider.GetApiKey();
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            await context.Response.WriteAsJsonAsync(new { error = "Import API key is not configured." });
+            return;
+        }
+
         var provided = context.Request.Headers["X-Api-Key"].FirstOrDefault();
         if (!string.Equals(provided, apiKey, StringComparison.Ordinal))
         {
