@@ -15,33 +15,34 @@ $qOpen = [char]0x201E
 $qClose = [char]0x201D
 
 # Monthly source writes the SAME companies differently to the contracted source.
-$stakordaMonthly = "UAB ${qOpen}Stakorda${qClose}"          # contracted: "Stakorda UAB"
-$globalitaMonthly = "UAB ${qOpen}Globalita projects${qClose}" # contracted: "Globalita projects UAB"
-$viaMonthly = "AB `"Via Lietuva`" | TKTP2"                    # contracted: "AB `"Via Lietuva`""
-$arboraMonthly = "Arbora LT,UAB"                              # contracted: "Arbora LT UAB"
-$infraMonthly = 'MB"4infra.LT"'                               # contracted: "MB 4infra.LT"
-$infraDifferentMonthly = "UAB 4infra.LT"                       # must NOT merge with MB 4infra.LT
-$triaMonthly = "Tria maria UAB"                                # contracted: UAB "Tria maria"
-$fimaMonthly = "Fima UAB"                                      # must NOT merge with UAB "Fima ITS"
+# All company names are fictional; only the formatting patterns mirror reality.
+$baltmaraMonthly = "UAB ${qOpen}Baltmara${qClose}"          # contracted: "Baltmara UAB"
+$grandetaMonthly = "UAB ${qOpen}Grandeta projects${qClose}" # contracted: "Grandeta projects UAB"
+$viaMonthly = "AB `"Rea Lietuva`" | TKTP2"                    # contracted: "AB `"Rea Lietuva`""
+$arvistaMonthly = "Arvista LT,UAB"                              # contracted: "Arvista LT UAB"
+$infraMonthly = 'MB"4tinklai.LT"'                               # contracted: "MB 4tinklai.LT"
+$infraDifferentMonthly = "UAB 4tinklai.LT"                       # must NOT merge with MB 4tinklai.LT
+$velaMonthly = "Vela maria UAB"                                # contracted: UAB "Vela maria"
+$domaMonthly = "Doma UAB"                                      # must NOT merge with UAB "Doma ITS"
 
 # Real-world convention (verified against the live DB):
-#   - Contracted source (Dynamics AX) stores the PROJECT PREFIX in projectCode
+#   - The PAD contract flow stores the PROJECT PREFIX in projectCode
 #     ("P1900") and the full object code in objectNumber ("P1900-01").
 #   - Monthly source stores the full object code in BOTH projectCode and
 #     objectNumber ("P1900-01"). All subcontractors sit on the same object.
 $contractJson = @{
-    sourceSystem = "DynamicsAX2009"
+    sourceSystem = "PADContractFlow"
     exportedAt = "2026-05-18T10:30:00Z"
     rows = @(
-        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "Stakorda UAB"; contractedAmount = 50000 },
-        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "Globalita projects UAB"; contractedAmount = 80000 },
-        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "AB `"Via Lietuva`""; contractedAmount = 100000 },
-        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "Arbora LT UAB"; contractedAmount = 10000 },
-        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "4infraLT MB"; contractedAmount = 7000 },
-        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "UAB 4infra.LT"; contractedAmount = 9000 },
-        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "UAB `"Tria maria`""; contractedAmount = 11000 },
-        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "UAB `"Fima ITS`""; contractedAmount = 12000 },
-        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "Fima UAB"; contractedAmount = 13000 }
+        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "Baltmara UAB"; contractedAmount = 50000 },
+        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "Grandeta projects UAB"; contractedAmount = 80000 },
+        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "AB `"Rea Lietuva`""; contractedAmount = 100000 },
+        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "Arvista LT UAB"; contractedAmount = 10000 },
+        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "4tinklaiLT MB"; contractedAmount = 7000 },
+        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "UAB 4tinklai.LT"; contractedAmount = 9000 },
+        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "UAB `"Vela maria`""; contractedAmount = 11000 },
+        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "UAB `"Doma ITS`""; contractedAmount = 12000 },
+        @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "Doma UAB"; contractedAmount = 13000 }
     )
 } | ConvertTo-Json -Depth 8
 
@@ -51,15 +52,15 @@ $monthlyJson = @{
     month = 4
     sheetName = "April"
     rows = @(
-        @{ sourceRow = 5; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = $stakordaMonthly; objectName = "Marking"; amountWithoutVat = 20000 },
-        @{ sourceRow = 6; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = $globalitaMonthly; objectName = "Drainage"; amountWithoutVat = 30000 },
+        @{ sourceRow = 5; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = $baltmaraMonthly; objectName = "Marking"; amountWithoutVat = 20000 },
+        @{ sourceRow = 6; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = $grandetaMonthly; objectName = "Drainage"; amountWithoutVat = 30000 },
         @{ sourceRow = 7; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = $viaMonthly; objectName = "Lighting"; amountWithoutVat = 40000 },
-        @{ sourceRow = 8; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = $arboraMonthly; objectName = "Earthworks"; amountWithoutVat = 5000 },
+        @{ sourceRow = 8; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = $arvistaMonthly; objectName = "Earthworks"; amountWithoutVat = 5000 },
         @{ sourceRow = 9; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = $infraMonthly; objectName = "Design"; amountWithoutVat = 3000 },
         @{ sourceRow = 10; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = $infraDifferentMonthly; objectName = "Design"; amountWithoutVat = 4000 },
-        @{ sourceRow = 11; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = $triaMonthly; objectName = "Design"; amountWithoutVat = 6000 },
-        @{ sourceRow = 12; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = $fimaMonthly; objectName = "Design"; amountWithoutVat = 7000 },
-        @{ sourceRow = 13; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = "UAB `"Fima ITS`""; objectName = "Design"; amountWithoutVat = 8000 }
+        @{ sourceRow = 11; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = $velaMonthly; objectName = "Design"; amountWithoutVat = 6000 },
+        @{ sourceRow = 12; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = $domaMonthly; objectName = "Design"; amountWithoutVat = 7000 },
+        @{ sourceRow = 13; projectCode = "P1900-01"; objectNumber = "P1900-01"; subcontractorName = "UAB `"Doma ITS`""; objectName = "Design"; amountWithoutVat = 8000 }
     )
     warnings = @()
 } | ConvertTo-Json -Depth 8
@@ -123,15 +124,15 @@ try {
     # All four sit on the same object, so identify each matched row by its
     # readable contracted display name (the monthly variant must NOT appear).
     $expected = @(
-        @{ name = "UAB Stakorda"; contracted = 50000; invoiced = 20000 },
-        @{ name = "UAB Globalita Projects"; contracted = 80000; invoiced = 30000 },
-        @{ name = "AB VIA Lietuva"; contracted = 100000; invoiced = 40000 },
-        @{ name = "UAB Arbora LT"; contracted = 10000; invoiced = 5000 },
-        @{ name = "MB 4infra.LT"; contracted = 7000; invoiced = 3000 },
-        @{ name = "UAB 4infra.LT"; contracted = 9000; invoiced = 4000 },
-        @{ name = "UAB Tria Maria"; contracted = 11000; invoiced = 6000 },
-        @{ name = "UAB Fima ITS"; contracted = 12000; invoiced = 8000 },
-        @{ name = "UAB Fima"; contracted = 13000; invoiced = 7000 }
+        @{ name = "UAB Baltmara"; contracted = 50000; invoiced = 20000 },
+        @{ name = "UAB Grandeta Projects"; contracted = 80000; invoiced = 30000 },
+        @{ name = "AB REA Lietuva"; contracted = 100000; invoiced = 40000 },
+        @{ name = "UAB Arvista LT"; contracted = 10000; invoiced = 5000 },
+        @{ name = "MB 4tinklai.LT"; contracted = 7000; invoiced = 3000 },
+        @{ name = "UAB 4tinklai.LT"; contracted = 9000; invoiced = 4000 },
+        @{ name = "UAB Vela Maria"; contracted = 11000; invoiced = 6000 },
+        @{ name = "UAB Doma ITS"; contracted = 12000; invoiced = 8000 },
+        @{ name = "UAB Doma"; contracted = 13000; invoiced = 7000 }
     )
     foreach ($e in $expected) {
         $row = @($contractRows | Where-Object { $_.subcontractorName -eq $e.name })
@@ -144,9 +145,9 @@ try {
     }
 
     $diagnostics = Invoke-RestMethod -Method Get -Uri "$baseUrl/api/diagnostics/subcontractors"
-    $infraMapping = @($diagnostics.rows | Where-Object { $_.normalizedKey -eq "MB|4INFRA.LT" })
-    if ($infraMapping.Count -ne 1 -or $infraMapping[0].canonicalName -ne "MB 4infra.LT" -or @($infraMapping[0].rawNames).Count -lt 2) {
-        throw "Diagnostics should expose MB 4infra.LT raw-name aliases under MB|4INFRA.LT: $($diagnostics | ConvertTo-Json -Depth 8 -Compress)"
+    $infraMapping = @($diagnostics.rows | Where-Object { $_.normalizedKey -eq "MB|4TINKLAI.LT" })
+    if ($infraMapping.Count -ne 1 -or $infraMapping[0].canonicalName -ne "MB 4tinklai.LT" -or @($infraMapping[0].rawNames).Count -lt 2) {
+        throw "Diagnostics should expose MB 4tinklai.LT raw-name aliases under MB|4TINKLAI.LT: $($diagnostics | ConvertTo-Json -Depth 8 -Compress)"
     }
 
     # Re-importing the identical monthly file is a duplicate and must not double-count.
@@ -160,9 +161,9 @@ try {
     if ($rowsAfter.Count -ne 9) {
         throw "Duplicate re-import must not change row count: got $($rowsAfter.Count)."
     }
-    $stakordaAfter = @($rowsAfter | Where-Object { $_.subcontractorName -eq "UAB Stakorda" })[0]
-    if ([decimal]$stakordaAfter.invoiced -ne [decimal]20000) {
-        throw "Duplicate re-import must not double-count invoiced (expected 20000, got $($stakordaAfter.invoiced))."
+    $baltmaraAfter = @($rowsAfter | Where-Object { $_.subcontractorName -eq "UAB Baltmara" })[0]
+    if ([decimal]$baltmaraAfter.invoiced -ne [decimal]20000) {
+        throw "Duplicate re-import must not double-count invoiced (expected 20000, got $($baltmaraAfter.invoiced))."
     }
 
     "Subcontractor name matching integration checks passed."

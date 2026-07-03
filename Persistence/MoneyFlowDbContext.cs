@@ -45,6 +45,7 @@ public sealed class MoneyFlowDbContext : DbContext
             entity.Property(row => row.RowType).IsRequired();
             entity.Property(row => row.AmountWithoutVat).HasColumnType("decimal(18,2)");
             entity.Property(row => row.IndexedAmount).HasColumnType("decimal(18,2)");
+            entity.Property(row => row.IsExcludedFromTotals).HasDefaultValue(false);
             entity.HasOne<ImportBatch>()
                 .WithMany()
                 .HasForeignKey(row => row.LastImportBatchId)

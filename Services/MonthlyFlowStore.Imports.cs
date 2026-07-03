@@ -104,7 +104,7 @@ public sealed partial class MonthlyFlowStore
         CancellationToken cancellationToken)
     {
         var warnings = new List<string>();
-        var sourceSystem = NullIfWhiteSpace(request.SourceSystem) ?? "ManualTest";
+        var sourceSystem = NullIfWhiteSpace(request.SourceSystem) ?? "PADFlow";
         var rows = ValidateContractRows(request.Rows, warnings);
         var projectValueRows = ValidateProjectValueRows(request.ProjectValueRows, warnings);
 
@@ -294,7 +294,10 @@ public sealed partial class MonthlyFlowStore
                 result.ProjectValuesUpdated++;
             }
 
-            if (rows.Count > 0 || projectValueRows.Count > 0)
+            // Only a payload carrying the contract sheet represents the full
+            // "latest" project set. A partial import (e.g. project values only)
+            // must never deactivate projects that simply weren't included.
+            if (rows.Count > 0)
             {
                 MarkProjectsMissingFromLatestContractImportInactive(db, incomingProjectCodes, now);
             }

@@ -40,11 +40,6 @@ public sealed partial class MonthlyFlowStore
         await BackfillSubcontractorIdentityAsync(db, cancellationToken);
     }
 
-    public Task CleanupDuplicatePeriodsAsync(CancellationToken cancellationToken)
-    {
-        return InitializeAsync(cancellationToken);
-    }
-
 }
 
 public sealed record SaveImportResult(SaveImportStatus Status, ImportBatch? ExistingBatch);
@@ -149,7 +144,23 @@ public sealed record ProjectContractDetailRow(
     bool IsImportedOnly,
     string? RowKey,
     string? Warning,
-    IReadOnlyCollection<ManualContractLinkInfo> Links);
+    IReadOnlyCollection<ManualContractLinkInfo> Links,
+    IReadOnlyCollection<MonthlyRowDetail> SourceRows);
+
+public sealed record MonthlyRowDetail(
+    Guid Id,
+    int Year,
+    int Month,
+    string ProjectCode,
+    string? ObjectNumber,
+    string? SubcontractorName,
+    string? CustomerName,
+    string? ObjectName,
+    decimal AmountWithoutVat,
+    string? SourceSheet,
+    int SourceRow,
+    string? Responsible,
+    string? Engineer);
 
 public sealed record ManualContractLinkInfo(Guid Id, string SourceName, string TargetName);
 
@@ -163,7 +174,7 @@ public sealed record YearMonth(int Year, int Month);
 
 internal sealed record InvoiceMatchKey(string ProjectCode, string ObjectNumber, string SubcontractorName, bool HasObjectNumber);
 
-sealed record ValidatedContractRow(
+internal sealed record ValidatedContractRow(
     string ProjectCode,
     string? ProjectName,
     string ObjectNumber,
@@ -182,7 +193,7 @@ sealed record ValidatedContractRow(
     string LogicalKey,
     string RowKey);
 
-sealed record ValidatedProjectValueRow(
+internal sealed record ValidatedProjectValueRow(
     string ProjectCode,
     string ObjectNumber,
     string? ObjectPrintCode,
