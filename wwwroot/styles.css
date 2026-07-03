@@ -1306,21 +1306,6 @@ table.imported-table thead th.col-money .sort-button {
 }
 .totals-cell.cell-enter { animation: cell-in 220ms var(--ease-out) backwards; }
 
-/* When the drawer (or a narrow window) squeezes the band, reflow the cells
-   into 3-per-row instead of shrinking the type to its floor. Keyed to the
-   band's own width, so it also fires on wide screens with the drawer open;
-   mirrors the max-width:1000px media rules. */
-.totals-section { container-type: inline-size; }
-@container (max-width: 1120px) {
-  .totals-band.is-split { flex-direction: column; }
-  .totals-band.is-split .totals-group + .totals-group { border-left: 0; border-top: 1px solid var(--line); }
-  .totals-group.is-sub .totals-group-cells { grid-template-columns: repeat(3, 1fr); }
-  .totals-group-cells .totals-cell { border-bottom: 1px solid var(--line-2); }
-  .totals-group.is-sub .totals-group-cells .totals-cell:nth-child(3n) { border-right: 0; }
-  .totals-group.is-sub .totals-group-cells .totals-cell:nth-last-child(-n+3) { border-bottom: 0; }
-  .totals-group.is-client .totals-group-cells .totals-cell { border-bottom: 0; }
-}
-
 .import-hint {
   display: flex;
   align-items: center;
