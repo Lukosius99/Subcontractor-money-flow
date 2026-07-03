@@ -38,6 +38,15 @@ function hide(el) { el.hidden = true; }
 function money(value) { return moneyFormatter.format(Number(value ?? 0)); }
 function numberValue(value) { return Number(value ?? 0); }
 
+/* Lithuanian plural form: 1/21/31… → one, 2–9/22–29… → few, 0/10–20/30… → many. */
+function ltPlural(count, one, few, many) {
+  const mod10 = Math.abs(count) % 10;
+  const mod100 = Math.abs(count) % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && (mod100 < 11 || mod100 > 19)) return few;
+  return many;
+}
+
 /* Project-side remaining: project (client) value minus what has been invoiced
    to the client — mirrors the detail page's Užsakovas "liko" figure. */
 function projectRemaining(project) {
@@ -190,7 +199,7 @@ function projectNameCell(fields) {
   if (fields.objectCount > 1) {
     const detail = document.createElement("span");
     detail.className = "project-name-sub";
-    detail.textContent = `${fields.objectCount} objekt${fields.objectCount === 1 ? "as" : "ai"}`;
+    detail.textContent = `${fields.objectCount} ${ltPlural(fields.objectCount, "objektas", "objektai", "objektų")}`;
     td.append(detail);
   }
 
@@ -333,13 +342,6 @@ function setSortIndicators() {
   });
 }
 
-function collectFilterOptions(getValue) {
-  return [...new Set(projectSummaries
-    .map((project) => getValue(projectDisplayFields(project)))
-    .filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-}
-
 function fillFilter(select, label, values) {
   const current = select.value;
   select.replaceChildren(
@@ -414,7 +416,7 @@ function statusStripChip({ label, count, tone, isActive, onClick, title }) {
 
   chip.setAttribute(
     "aria-label",
-    `${label}: ${count} projekt${count === 1 ? "as" : "ai"}. ${isActive ? "Filtras aktyvus, spustelėkite, kad išvalytumėte." : "Spustelėkite, kad filtruotumėte."}`
+    `${label}: ${count} ${ltPlural(count, "projektas", "projektai", "projektų")}. ${isActive ? "Filtras aktyvus, spustelėkite, kad išvalytumėte." : "Spustelėkite, kad filtruotumėte."}`
   );
 
   const value = document.createElement("span");
@@ -522,7 +524,7 @@ function renderProjects() {
   const total = projectSummaries.length;
   projectCount.textContent = total === 0
     ? "Projektų nėra"
-    : `${filtered.length} iš ${total} projekt${total === 1 ? "as" : "ų"}`;
+    : `${filtered.length} iš ${total} ${ltPlural(total, "projekto", "projektų", "projektų")}`;
 
   if (total === 0) { show(empty); return; }
   hide(empty);

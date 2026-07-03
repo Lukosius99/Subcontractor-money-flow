@@ -21,4 +21,8 @@ public sealed class MonthlyMoneyFlowRow
     public required string RowKey { get; set; }
     public Guid LastImportBatchId { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public bool IsExcludedFromTotals { get; set; }
+    public DateTimeOffset? ExcludedAt { get; set; }
+    public string? ExcludedReason { get; set; }
+    public string? ExcludedBy { get; set; }
 }

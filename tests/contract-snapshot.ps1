@@ -11,7 +11,7 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dbPath) | Out-Nul
 
 function New-ContractJson($rows) {
     @{
-        sourceSystem = "DynamicsAX2009"
+        sourceSystem = "PADContractFlow"
         exportedAt = "2026-06-03T08:00:00Z"
         rows = $rows
     } | ConvertTo-Json -Depth 8

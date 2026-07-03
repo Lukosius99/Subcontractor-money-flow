@@ -94,6 +94,7 @@ internal static class ProjectEndpoints
             var parentSummary = summaries.FirstOrDefault(summary =>
                 string.Equals(summary.ProjectCode, parentProjectCode, StringComparison.OrdinalIgnoreCase));
             var rows = await store.GetRowsForProjectScopeAsync(projectCode, selectedObjectNumber, cancellationToken);
+            var ignoredRows = await store.GetIgnoredRowsForProjectScopeAsync(projectCode, selectedObjectNumber, cancellationToken);
             var detail = await store.GetProjectDetailAsync(projectCode, selectedObjectNumber, cancellationToken);
             var subcontractorRows = rows
                 .Where(row => !MonthlyFlowStore.IsClientMonthlyValueRow(row))
@@ -159,6 +160,7 @@ internal static class ProjectEndpoints
                 projectName = detail.ProjectName,
                 responsible = detail.Responsible,
                 engineer = detail.Engineer,
+                ignoredRowCount = ignoredRows.Count,
                 contractCount = detail.ContractCount,
                 totals = new
                 {

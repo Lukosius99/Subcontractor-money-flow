@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $dbPath = Join-Path $projectRoot "test-data/monthly-flow-real-april.db"
-$baseUrl = "http://localhost:5091"
+$baseUrl = "http://localhost:5092"
 
 $json = @{
     schemaVersion = "1.3"

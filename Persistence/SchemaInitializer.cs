@@ -193,6 +193,11 @@ internal static class SchemaInitializer
             "TEXT NOT NULL DEFAULT 'SubcontractorInvoice'",
             cancellationToken);
 
+        await AddColumnIfMissingAsync(db, "MonthlyFlowRows", "IsExcludedFromTotals", "INTEGER NOT NULL DEFAULT 0", cancellationToken);
+        await AddColumnIfMissingAsync(db, "MonthlyFlowRows", "ExcludedAt", "TEXT NULL", cancellationToken);
+        await AddColumnIfMissingAsync(db, "MonthlyFlowRows", "ExcludedReason", "TEXT NULL", cancellationToken);
+        await AddColumnIfMissingAsync(db, "MonthlyFlowRows", "ExcludedBy", "TEXT NULL", cancellationToken);
+
         await db.Database.ExecuteSqlRawAsync("""
             CREATE TABLE IF NOT EXISTS ProjectObjectValues (
                 Id TEXT NOT NULL CONSTRAINT PK_ProjectObjectValues PRIMARY KEY,
@@ -370,6 +375,10 @@ internal static class SchemaInitializer
                 RowKey TEXT NOT NULL,
                 LastImportBatchId TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
+                IsExcludedFromTotals INTEGER NOT NULL DEFAULT 0,
+                ExcludedAt TEXT NULL,
+                ExcludedReason TEXT NULL,
+                ExcludedBy TEXT NULL,
                 CONSTRAINT FK_MonthlyFlowRows_ImportBatches_LastImportBatchId
                     FOREIGN KEY (LastImportBatchId) REFERENCES ImportBatches (Id) ON DELETE RESTRICT
             );

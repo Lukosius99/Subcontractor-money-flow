@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore PADS.MoneyFlow.Api.csproj
+
+      - name: Verify formatting
+        run: dotnet format PADS.MoneyFlow.Api.csproj --verify-no-changes --no-restore
+
+      - name: Build
+        run: dotnet build PADS.MoneyFlow.Api.csproj -c Release --no-restore
+
+      - name: Check vulnerable packages
+        run: dotnet list PADS.MoneyFlow.Api.csproj package --vulnerable --include-transitive
+
+      - name: Parse JavaScript
+        shell: pwsh
+        run: |
+          Get-ChildItem wwwroot,docs -Recurse -Filter *.js | ForEach-Object {
+            node --check $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw "JavaScript parse failed: $($_.FullName)" }
+          }
+
+      - name: Run integration checks
+        shell: pwsh
+        run: |
+          # Tests signal failure by throwing (which fails this step); they run no
+          # native commands in-process, so $LASTEXITCODE would be $null here and
+          # a `-ne 0` check would fail even after a passing test.
+          $ErrorActionPreference = "Stop"
+          Get-ChildItem tests -Filter *.ps1 | Sort-Object Name | ForEach-Object {
+            Write-Host "Running $($_.Name)"
+            & $_.FullName
+          }

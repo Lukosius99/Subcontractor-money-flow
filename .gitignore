@@ -1,38 +1,60 @@
-# Build output
+# .NET build and test output
 bin/
 obj/
 publish/
+artifacts/
+TestResults/
+coverage/
 binBuildCheck*/
 
-# Working database (lives in C:\ProgramData on a deployed machine; never commit the live copy)
+# SQLite databases and transient files (live or copied data must never enter Git)
 data/
-data/*.db
-data/*.db-shm
-data/*.db-wal
+seed/
+test-data/
+*.db
+*.sqlite
+*.sqlite3
 *.db-wal
 *.db-shm
 *.db-journal
-*.log
+
+# Logs, backups, archives, and temporary output
 logs/
+*.log
 *.tmp
 *.bak
+*.old
 *.zip
-
-# Throwaway dev/test fixtures and logs (~48 MB, not needed to run the app)
-test-data/
-test-data/*store*.json
-
-# Local tooling / IDE
-.vs/
-*.user
-.claude/
-.idea/
-.vscode/
-
-# Local imports and exports can contain company data
-imports/
 temp/
 tmp/
+output/
+exports/
+pad-output/
+power-automate-output/
 
-# NOTE: seed/monthly-money-flow.db IS tracked on purpose — it is the bundled
-# initial dataset the deploy script restores on a fresh machine.
+# Local imports/exports can contain company or personal data
+imports/
+test-data/*store*.json
+
+# Secrets and machine-specific configuration
+.env
+.env.*
+!.env.example
+api-key.txt
+appsettings.Development.json
+appsettings.Local.json
+appsettings.*.local.json
+
+# IDE and tool state
+.vs/
+.idea/
+.vscode/
+.claude/
+*.suo
+*.user
+*.userosscache
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini

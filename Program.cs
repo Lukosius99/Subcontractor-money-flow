@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PADS.MoneyFlow.Api.Endpoints;
@@ -7,10 +9,11 @@ using PADS.MoneyFlow.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // Allow hosting as a Windows Service. No-op when running interactively from a
-// console (e.g. `dotnet run`), so the dev workflow is unchanged.
+// console (e.g. `dotnet run`), so the dev workflow is unchanged. The name
+// matches the service registered by Deploy-MoneyFlow.ps1.
 builder.Host.UseWindowsService(options =>
 {
-    options.ServiceName = "PADS Monthly Money Flow";
+    options.ServiceName = "MoneyFlow";
 });
 
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -58,7 +61,20 @@ if (string.IsNullOrWhiteSpace(apiKeyProvider.GetApiKey()))
 }
 
 await app.Services.GetRequiredService<MonthlyFlowStore>()
-    .CleanupDuplicatePeriodsAsync(CancellationToken.None);
+    .InitializeAsync(CancellationToken.None);
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["Content-Security-Policy"] =
+        "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; " +
+        "form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+        "font-src 'self'; img-src 'self' data:; connect-src 'self'";
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["Referrer-Policy"] = "no-referrer";
+    context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+    await next();
+});
 
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions
@@ -95,8 +111,13 @@ app.Use(async (context, next) =>
             return;
         }
 
+        // Fixed-time comparison so response timing doesn't reveal how much of
+        // a guessed key matched.
         var provided = context.Request.Headers["X-Api-Key"].FirstOrDefault();
-        if (!string.Equals(provided, apiKey, StringComparison.Ordinal))
+        if (provided is null
+            || !CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(provided),
+                Encoding.UTF8.GetBytes(apiKey)))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             await context.Response.WriteAsJsonAsync(new { error = "Missing or invalid API key." });
