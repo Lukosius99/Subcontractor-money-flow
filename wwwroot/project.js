@@ -861,6 +861,8 @@ function totalsMetaText(text, tone) {
   const span = document.createElement("span");
   span.className = `totals-meta-text${tone ? ` is-${tone}` : ""}`;
   span.textContent = text;
+  /* meta lines ellipsize instead of wrapping when the band is narrow */
+  span.title = text;
   return span;
 }
 
@@ -925,19 +927,28 @@ let observedTotalsWidth = 0;
 function fitTotalsValues() {
   totalsFitFrame = 0;
   const values = [...kpiCards.querySelectorAll(".totals-value")];
+  const metas = [...kpiCards.querySelectorAll(".totals-meta-text, .totals-meta .usage-num")];
   kpiCards.style.removeProperty("--totals-value-size");
+  kpiCards.style.removeProperty("--totals-meta-size");
   const visibleValues = values.filter((value) => value.clientWidth > 0);
-  if (visibleValues.length === 0) return;
-
-  const fits = (fontSize) => {
-    kpiCards.style.setProperty("--totals-value-size", `${fontSize}px`);
-    return visibleValues.every((value) => value.scrollWidth <= value.clientWidth);
-  };
+  const visibleMetas = metas.filter((meta) => meta.clientWidth > 0);
+  if (visibleValues.length === 0 && visibleMetas.length === 0) return;
 
   const maxSize = 22;
   const minSize = 12;
+  /* meta lines scale in step with the values, but never below 9px */
+  const metaSizeFor = (fontSize) => Math.max(9, fontSize * 11.5 / maxSize);
+
+  const fits = (fontSize) => {
+    kpiCards.style.setProperty("--totals-value-size", `${fontSize}px`);
+    kpiCards.style.setProperty("--totals-meta-size", `${metaSizeFor(fontSize)}px`);
+    return visibleValues.every((value) => value.scrollWidth <= value.clientWidth)
+      && visibleMetas.every((meta) => meta.scrollWidth <= meta.clientWidth);
+  };
+
   if (fits(maxSize)) {
     kpiCards.style.removeProperty("--totals-value-size");
+    kpiCards.style.removeProperty("--totals-meta-size");
     return;
   }
 
@@ -948,7 +959,9 @@ function fitTotalsValues() {
     if (fits(candidate)) low = candidate;
     else high = candidate;
   }
-  kpiCards.style.setProperty("--totals-value-size", `${Math.floor(low * 10) / 10}px`);
+  const fitted = Math.floor(low * 10) / 10;
+  kpiCards.style.setProperty("--totals-value-size", `${fitted}px`);
+  kpiCards.style.setProperty("--totals-meta-size", `${metaSizeFor(fitted)}px`);
 }
 
 function scheduleTotalsFit() {
