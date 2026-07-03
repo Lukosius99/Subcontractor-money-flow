@@ -14,7 +14,7 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dbPath) | Out-Nul
 # is part of the matching key on purpose, so the rows do NOT merge until a user
 # manually connects them.
 $contractJson = @{
-    sourceSystem = "DynamicsAX2009"
+    sourceSystem = "PADContractFlow"
     exportedAt = "2026-05-18T10:30:00Z"
     rows = @(
         @{ projectCode = "P1578"; objectNumber = "P1578-01"; subcontractorName = "MB Energostatas"; contractedAmount = 28000 },

@@ -60,6 +60,7 @@ public sealed partial class MonthlyFlowStore
         await SchemaInitializer.EnsureMasterDataTablesAsync(db, cancellationToken);
         var rows = await db.MonthlyFlowRows
             .AsNoTracking()
+            .Where(row => !row.IsExcludedFromTotals)
             .OrderBy(row => row.Year)
             .ThenBy(row => row.Month)
             .ThenBy(row => row.ProjectCode)
@@ -93,6 +94,7 @@ public sealed partial class MonthlyFlowStore
 
         var rows = await db.MonthlyFlowRows
             .AsNoTracking()
+            .Where(row => !row.IsExcludedFromTotals)
             .OrderBy(row => row.Year)
             .ThenBy(row => row.Month)
             .ThenBy(row => row.ProjectCode)
@@ -160,7 +162,7 @@ public sealed partial class MonthlyFlowStore
 
         var rows = await db.MonthlyFlowRows
             .AsNoTracking()
-            .Where(row => row.ProjectCode != "")
+            .Where(row => row.ProjectCode != "" && !row.IsExcludedFromTotals)
             .Select(row => new
             {
                 row.ProjectCode,
@@ -499,12 +501,14 @@ public sealed partial class MonthlyFlowStore
                 // Responsible/engineer: prefer monthly data, fall back to contracted (Fix 2).
                 var responsible = !string.IsNullOrWhiteSpace(invoice?.Responsible)
                     ? invoice!.Responsible
-                    : (!string.IsNullOrWhiteSpace(contract?.Responsible) ? contract!.Responsible
-                    : (!string.IsNullOrWhiteSpace(projectRecord?.Responsible) ? projectRecord!.Responsible : null));
+                    : !string.IsNullOrWhiteSpace(contract?.Responsible)
+                        ? contract!.Responsible
+                        : !string.IsNullOrWhiteSpace(projectRecord?.Responsible) ? projectRecord!.Responsible : null;
                 var engineer = !string.IsNullOrWhiteSpace(invoice?.Engineer)
                     ? invoice!.Engineer
-                    : (!string.IsNullOrWhiteSpace(contract?.Engineer) ? contract!.Engineer
-                    : (!string.IsNullOrWhiteSpace(projectRecord?.Engineer) ? projectRecord!.Engineer : null));
+                    : !string.IsNullOrWhiteSpace(contract?.Engineer)
+                        ? contract!.Engineer
+                        : !string.IsNullOrWhiteSpace(projectRecord?.Engineer) ? projectRecord!.Engineer : null;
 
                 return new ProjectSummary(
                     projectCode,
@@ -755,7 +759,21 @@ public sealed partial class MonthlyFlowStore
             isImportedOnly,
             rowKey,
             warning,
-            links);
+            links,
+            rows.Select(row => new MonthlyRowDetail(
+                row.Id,
+                row.Year,
+                row.Month,
+                row.ProjectCode,
+                row.ObjectNumber,
+                row.SubcontractorName,
+                row.CustomerName,
+                row.ObjectName,
+                row.AmountWithoutVat,
+                row.SourceSheet,
+                row.SourceRow,
+                row.Responsible,
+                row.Engineer)).ToList());
     }
 
     private static IReadOnlyCollection<SmdCustomerInvoiceRow> BuildSmdCustomerRows(

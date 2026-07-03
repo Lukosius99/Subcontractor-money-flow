@@ -333,13 +333,6 @@ function setSortIndicators() {
   });
 }
 
-function collectFilterOptions(getValue) {
-  return [...new Set(projectSummaries
-    .map((project) => getValue(projectDisplayFields(project)))
-    .filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-}
-
 function fillFilter(select, label, values) {
   const current = select.value;
   select.replaceChildren(

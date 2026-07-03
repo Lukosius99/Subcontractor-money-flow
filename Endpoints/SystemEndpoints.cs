@@ -10,16 +10,25 @@ internal static class SystemEndpoints
         // database or the real API. Intentionally open (no API key required).
         app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
-        app.MapGet("/api/diagnostics/subcontractors", async (
-            MonthlyFlowStore store,
-            CancellationToken cancellationToken) =>
+        if (!app.Environment.IsProduction())
         {
-            var rows = await store.GetSubcontractorDiagnosticsAsync(cancellationToken);
-            return Results.Ok(new
+            app.MapGet("/api/diagnostics/subcontractors", async (
+                MonthlyFlowStore store,
+                CancellationToken cancellationToken) =>
             {
-                count = rows.Count,
-                rows
+                var rows = await store.GetSubcontractorDiagnosticsAsync(cancellationToken);
+                return Results.Ok(new
+                {
+                    count = rows.Count,
+                    rows
+                });
             });
-        });
+        }
+        else
+        {
+            // Reserve the API route so the SPA fallback cannot turn it into a
+            // misleading 200 response containing index.html in Production.
+            app.MapGet("/api/diagnostics/subcontractors", () => Results.NotFound());
+        }
     }
 }

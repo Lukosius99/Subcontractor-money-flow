@@ -25,12 +25,12 @@ $triaMonthly = "Tria maria UAB"                                # contracted: UAB
 $fimaMonthly = "Fima UAB"                                      # must NOT merge with UAB "Fima ITS"
 
 # Real-world convention (verified against the live DB):
-#   - Contracted source (Dynamics AX) stores the PROJECT PREFIX in projectCode
+#   - The PAD contract flow stores the PROJECT PREFIX in projectCode
 #     ("P1900") and the full object code in objectNumber ("P1900-01").
 #   - Monthly source stores the full object code in BOTH projectCode and
 #     objectNumber ("P1900-01"). All subcontractors sit on the same object.
 $contractJson = @{
-    sourceSystem = "DynamicsAX2009"
+    sourceSystem = "PADContractFlow"
     exportedAt = "2026-05-18T10:30:00Z"
     rows = @(
         @{ projectCode = "P1900"; objectNumber = "P1900-01"; subcontractorName = "Stakorda UAB"; contractedAmount = 50000 },

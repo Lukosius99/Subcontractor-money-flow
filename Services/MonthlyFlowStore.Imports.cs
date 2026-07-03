@@ -104,7 +104,7 @@ public sealed partial class MonthlyFlowStore
         CancellationToken cancellationToken)
     {
         var warnings = new List<string>();
-        var sourceSystem = NullIfWhiteSpace(request.SourceSystem) ?? "ManualTest";
+        var sourceSystem = NullIfWhiteSpace(request.SourceSystem) ?? "PADFlow";
         var rows = ValidateContractRows(request.Rows, warnings);
         var projectValueRows = ValidateProjectValueRows(request.ProjectValueRows, warnings);
 

@@ -269,6 +269,9 @@ a:hover { color: var(--accent-hov); text-decoration: underline; }
   gap: 24px;
   align-items: start;
 }
+.detail-main {
+  min-width: 0;
+}
 body.drawer-open .detail-layout {
   grid-template-columns: minmax(0, 1fr) 448px;
 }
@@ -687,6 +690,28 @@ body.drawer-open .detail-layout {
   font-size: 12px;
   line-height: 1.5;
 }
+.modal-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.modal-field textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  padding: 9px 10px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.modal-field textarea:focus { outline: 2px solid var(--accent-line); outline-offset: 1px; }
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -885,6 +910,32 @@ table.imported-table tbody td {
   border-bottom: 1px solid var(--line-2);
   vertical-align: middle;
 }
+
+table.contract-table thead th { overflow: visible; }
+.column-resizer {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  bottom: 0;
+  z-index: 5;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.column-resizer::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 4px;
+  bottom: 5px;
+  width: 1px;
+  background: transparent;
+}
+.column-resizer:hover::after,
+.column-resizer:focus-visible::after,
+.column-resizer.is-resizing::after { background: var(--accent); }
+.column-resizer:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+body.is-resizing-column { cursor: col-resize; user-select: none; }
 
 table.register tbody td { height: 46px; }
 
@@ -1139,6 +1190,7 @@ table.imported-table thead th.col-money .sort-button {
    beneath; the only color is data: red when a figure demands attention. */
 
 .totals-band {
+  container-type: inline-size;
   display: flex;
   align-items: stretch;
   background: var(--surface);
@@ -1187,14 +1239,13 @@ table.imported-table thead th.col-money .sort-button {
 
 .totals-value {
   color: var(--ink);
-  font-size: 22px;
+  font-size: var(--totals-value-size, clamp(12px, 1.05cqw, 22px));
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   line-height: 1.15;
   white-space: nowrap;
 }
-.totals-value.is-long { font-size: 16px; line-height: 1.5; }
 .totals-value.is-danger { color: var(--danger); }
 .totals-value.is-quiet { color: var(--muted-2); font-weight: 550; }
 .totals-value em {
@@ -1220,7 +1271,16 @@ table.imported-table thead th.col-money .sort-button {
   margin-top: auto;
   color: var(--muted);
   font-size: 11.5px;
+  min-width: 0;
 }
+.totals-meta > .usage {
+  display: grid;
+  grid-template-columns: minmax(18px, 1fr) max-content;
+  width: 100%;
+  min-width: 0;
+}
+.totals-meta > .usage .usage-bar { width: auto; min-width: 18px; }
+.totals-meta > .usage .usage-num { min-width: 0; }
 .totals-meta-text { color: var(--muted-2); font-variant-numeric: tabular-nums; }
 .totals-meta-text.is-danger { color: var(--danger); font-weight: 550; }
 
@@ -1563,7 +1623,7 @@ table.imported-table thead th.col-money .sort-button {
   box-shadow: 0 -1px 0 var(--line-strong);
 }
 
-table.contract-table { min-width: 880px; }
+table.contract-table { min-width: 880px; table-layout: fixed; }
 table.register { min-width: 1120px; }
 
 table.contract-table tbody tr {
@@ -1636,7 +1696,7 @@ table.contract-table tfoot td {
 
 /* Long company names truncate so Status / Last invoice / Match stay visible */
 table.contract-table tbody td.subcontractor-name {
-  max-width: 210px;
+  max-width: none;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -2001,6 +2061,7 @@ body.drawer-open .drawer {
 .drawer-head.drawer-status-warn   { border-top: 4px solid var(--warn-strong); }
 .drawer-head.drawer-status-full   { border-top: 4px solid var(--full-strong); }
 .drawer-head.drawer-status-ok     { border-top: 4px solid var(--ok-strong); }
+.ignored-drawer-head { border-bottom: 1px solid var(--line); }
 .drawer-title { min-width: 0; }
 .drawer-title h2 {
   display: inline;
@@ -2274,6 +2335,90 @@ body.drawer-open .drawer {
 }
 .drawer-table tr:last-child td { border-bottom: 0; }
 
+.ignored-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-grid;
+  place-items: center;
+  color: var(--ink-2);
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.btn.has-ignored { color: var(--ink-2); }
+.row-action-ignore {
+  padding: 4px 7px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.row-action-ignore:hover { color: var(--ink-2); background: var(--surface-alt); border-color: var(--line); }
+.row-action-ignore:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+.col-action { width: 1%; text-align: right; }
+.ignored-drawer-body { padding: 14px; }
+.ignored-search {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: 12px;
+}
+.ignored-search:focus { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+.ignored-list { display: grid; gap: 10px; margin-top: 12px; }
+.ignored-row-card { padding: 12px; background: var(--surface-alt); border: 1px solid var(--line); border-radius: var(--r-md); }
+.ignored-row-top { display: flex; justify-content: space-between; gap: 12px; color: var(--ink); font-size: 12.5px; }
+.ignored-row-top strong:first-child { min-width: 0; overflow-wrap: anywhere; }
+.ignored-row-amount { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.ignored-row-meta { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 5px 10px; margin: 10px 0 12px; font-size: 11.5px; }
+.ignored-row-meta dt { color: var(--muted); }
+.ignored-row-meta dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.ignored-restore { height: 30px; padding: 0 10px; }
+.drawer-invoice-list { margin-top: 18px; border-top: 1px solid var(--line); }
+.drawer-invoice-list h3 { margin: 14px 0 6px; }
+.drawer-invoice-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 11.5px;
+}
+.drawer-invoice-row > div { display: grid; gap: 2px; min-width: 0; }
+.drawer-invoice-row > div span { color: var(--muted); }
+.drawer-invoice-amount { color: var(--ink); font-variant-numeric: tabular-nums; }
+.drawer-invoice-row .row-action-ignore { grid-column: 1 / -1; justify-self: start; padding-left: 0; }
+.undo-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  color: var(--surface);
+  background: var(--ink);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  font-size: 12.5px;
+}
+.undo-toast button { padding: 3px 5px; color: inherit; background: transparent; border: 0; font: inherit; font-weight: 700; cursor: pointer; }
+.undo-toast button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
 /* definition list inside drawer (contracts tab) */
 .drawer-dl {
   display: grid;
@@ -2498,6 +2643,7 @@ table.contract-table tbody tr.link-target:hover { background: #DCE7FB; }
   font-size: 12px;
 }
 .app-footer-sep { color: var(--line-strong); }
+.footer-ignored-button { margin-left: auto; height: 32px; color: var(--muted); }
 
 /* ─── Focus ─────────────────────────────────────────────────────────────── */
 
