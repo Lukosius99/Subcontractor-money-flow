@@ -924,32 +924,22 @@ function totalsGroup(label, modifier, cells) {
 let totalsFitFrame = 0;
 let observedTotalsWidth = 0;
 
-function fitTotalsValues() {
-  totalsFitFrame = 0;
-  const values = [...kpiCards.querySelectorAll(".totals-value")];
-  const metas = [...kpiCards.querySelectorAll(".totals-meta-text, .totals-meta .usage-num")];
-  kpiCards.style.removeProperty("--totals-value-size");
-  kpiCards.style.removeProperty("--totals-meta-size");
-  const visibleValues = values.filter((value) => value.clientWidth > 0);
-  const visibleMetas = metas.filter((meta) => meta.clientWidth > 0);
-  if (visibleValues.length === 0 && visibleMetas.length === 0) return;
-
-  const maxSize = 22;
-  const minSize = 12;
-  /* meta lines scale in step with the values, but never below 9px */
-  const metaSizeFor = (fontSize) => Math.max(9, fontSize * 11.5 / maxSize);
+/* Shrink `elements` via `cssVar` until every one fits its cell (binary
+   search); leaves the var unset when the default size already fits. Returns
+   true when everything fits at the chosen size. */
+function fitFontSize(elements, cssVar, maxSize, minSize) {
+  kpiCards.style.removeProperty(cssVar);
+  const visible = elements.filter((el) => el.clientWidth > 0);
+  if (visible.length === 0) return true;
 
   const fits = (fontSize) => {
-    kpiCards.style.setProperty("--totals-value-size", `${fontSize}px`);
-    kpiCards.style.setProperty("--totals-meta-size", `${metaSizeFor(fontSize)}px`);
-    return visibleValues.every((value) => value.scrollWidth <= value.clientWidth)
-      && visibleMetas.every((meta) => meta.scrollWidth <= meta.clientWidth);
+    kpiCards.style.setProperty(cssVar, `${fontSize}px`);
+    return visible.every((el) => el.scrollWidth <= el.clientWidth);
   };
 
   if (fits(maxSize)) {
-    kpiCards.style.removeProperty("--totals-value-size");
-    kpiCards.style.removeProperty("--totals-meta-size");
-    return;
+    kpiCards.style.removeProperty(cssVar);
+    return true;
   }
 
   let low = minSize;
@@ -960,8 +950,22 @@ function fitTotalsValues() {
     else high = candidate;
   }
   const fitted = Math.floor(low * 10) / 10;
-  kpiCards.style.setProperty("--totals-value-size", `${fitted}px`);
-  kpiCards.style.setProperty("--totals-meta-size", `${metaSizeFor(fitted)}px`);
+  kpiCards.style.setProperty(cssVar, `${fitted}px`);
+  return fits(fitted);
+}
+
+function fitTotalsValues() {
+  totalsFitFrame = 0;
+  /* Values first (12–22px), then the meta lines independently (9–11.5px) so a
+     long note never drags the headline figures down; past 9px the meta line
+     ellipsizes (full text stays in the title tooltip). */
+  fitFontSize([...kpiCards.querySelectorAll(".totals-value")], "--totals-value-size", 22, 12);
+  fitFontSize(
+    [...kpiCards.querySelectorAll(".totals-meta-text, .totals-meta .usage-num")],
+    "--totals-meta-size",
+    11.5,
+    9
+  );
 }
 
 function scheduleTotalsFit() {
