@@ -96,7 +96,7 @@ public static class SubcontractorNormalizer
             return value;
         }
 
-        return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(value.ToLower(CultureInfo.CurrentCulture));
+        return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(value.ToLowerInvariant());
     }
 
     private static int ClientDisplayScore(string name)
@@ -278,7 +278,7 @@ public static class SubcontractorNormalizer
             return token;
         }
 
-        return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(token.ToLower(CultureInfo.CurrentCulture));
+        return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(token.ToLowerInvariant());
     }
 
     private static string NormalizeCompanyToken(string token)

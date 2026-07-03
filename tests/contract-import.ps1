@@ -177,14 +177,14 @@ function New-SmdMonthlyJson() {
                 sourceRow = 60
                 projectCode = "P1737-1"
                 objectNumber = "P1737-1"
-                subcontractorName = "AB `"VIA LIETUVA`""
+                subcontractorName = "AB `"REA LIETUVA`""
                 objectName = "Client object"
                 amountWithoutVat = 458220.51
             },
             @{
                 sourceSheet = "SMD"
                 sourceRow = 61
-                projectCode = "AB `"VIA LIETUVA`""
+                projectCode = "AB `"REA LIETUVA`""
                 objectNumber = "P1677-01"
                 subcontractorName = "KTP5"
                 objectName = "Legacy SMD object"
@@ -325,13 +325,13 @@ try {
     }
 
     $p1737Smd = @($project1737.smdCustomerRows)
-    if ($p1737Smd.Count -ne 1 -or $p1737Smd[0].objectNumber -ne "P1737-1" -or $p1737Smd[0].customerName -ne 'Via Lietuva' -or [decimal]$p1737Smd[0].clientMonthlyAmount -ne [decimal]458220.51 -or $p1737Smd[0].sourceSheet -ne "SMD" -or @($p1737Smd[0].sourceRows)[0] -ne 60) {
+    if ($p1737Smd.Count -ne 1 -or $p1737Smd[0].objectNumber -ne "P1737-1" -or $p1737Smd[0].customerName -ne 'Rea Lietuva' -or [decimal]$p1737Smd[0].clientMonthlyAmount -ne [decimal]458220.51 -or $p1737Smd[0].sourceSheet -ne "SMD" -or @($p1737Smd[0].sourceRows)[0] -ne 60) {
         throw "P1737 SMD client value should render as a separate business row with source SMD #60: $($project1737 | ConvertTo-Json -Depth 8 -Compress)"
     }
 
     $project1677 = Invoke-RestMethod -Method Get -Uri "$baseUrl/api/projects/P1677/monthly-flow?objectNumber=P1677-01"
     $p1677Smd = @($project1677.smdCustomerRows)
-    if ($p1677Smd.Count -ne 1 -or $p1677Smd[0].objectNumber -ne "P1677-01" -or $p1677Smd[0].customerName -ne 'Via Lietuva' -or [decimal]$p1677Smd[0].clientMonthlyAmount -ne [decimal]125000) {
+    if ($p1677Smd.Count -ne 1 -or $p1677Smd[0].objectNumber -ne "P1677-01" -or $p1677Smd[0].customerName -ne 'Rea Lietuva' -or [decimal]$p1677Smd[0].clientMonthlyAmount -ne [decimal]125000) {
         throw "Legacy SMD mapping should use projectCode as client when subcontractorName is a department code: $($project1677 | ConvertTo-Json -Depth 8 -Compress)"
     }
 

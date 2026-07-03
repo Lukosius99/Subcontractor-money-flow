@@ -45,8 +45,11 @@ jobs:
       - name: Run integration checks
         shell: pwsh
         run: |
+          # Tests signal failure by throwing (which fails this step); they run no
+          # native commands in-process, so $LASTEXITCODE would be $null here and
+          # a `-ne 0` check would fail even after a passing test.
+          $ErrorActionPreference = "Stop"
           Get-ChildItem tests -Filter *.ps1 | Sort-Object Name | ForEach-Object {
             Write-Host "Running $($_.Name)"
             & $_.FullName
-            if ($LASTEXITCODE -ne 0) { throw "Integration check failed: $($_.Name)" }
           }

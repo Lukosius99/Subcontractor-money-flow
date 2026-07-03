@@ -92,7 +92,7 @@ public sealed partial class MonthlyFlowStore
 
             var row = await db.MonthlyFlowRows.FirstAsync(candidate => candidate.Id == rowId, cancellationToken);
 
-            var cleanReason = NullIfWhiteSpace(reason)?.Trim();
+            var cleanReason = NullIfWhiteSpace(reason);
             if (cleanReason?.Length > 500)
             {
                 cleanReason = cleanReason[..500];

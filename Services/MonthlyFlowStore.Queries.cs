@@ -140,11 +140,24 @@ public sealed partial class MonthlyFlowStore
             .Where(value => ProjectRowIsInScope(value.ProjectCode, value.ObjectNumber, projectCode, objectNumber))
             .ToList();
 
+        // Object-scoped views pass object codes that don't exist in Projects
+        // (it stores parent codes only), so fall back to the parent project to
+        // keep Responsible/Engineer populated on object-level pages.
+        var projectLookup = (objectNumber ?? projectCode).ToLower();
         var project = await db.Projects
             .AsNoTracking()
             .FirstOrDefaultAsync(
-                existing => existing.ProjectCode.ToLower() == (objectNumber ?? projectCode).ToLower(),
+                existing => existing.ProjectCode.ToLower() == projectLookup,
                 cancellationToken);
+        if (project is null)
+        {
+            var parentLookup = ParseProjectObjectCode(projectCode).ParentProjectCode.ToLower();
+            project = await db.Projects
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    existing => existing.ProjectCode.ToLower() == parentLookup,
+                    cancellationToken);
+        }
 
         return BuildProjectDetail(projectCode, project, contracts, objectValues, rows, aliasMap, manualLinks, objectAssignments);
     }
