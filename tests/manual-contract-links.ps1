@@ -2,23 +2,23 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $dbPath = Join-Path $projectRoot "test-data/manual-contract-links.db"
-$baseUrl = "http://localhost:5094"
+$baseUrl = "http://localhost:5095"
 
 if (Test-Path $dbPath) {
     Remove-Item -LiteralPath $dbPath -Force
 }
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dbPath) | Out-Null
 
-# Scenario from production data: contract is registered as "MB Energostatas",
-# but the monthly source file was filled in with "UAB Energostatas". Legal form
-# is part of the matching key on purpose, so the rows do NOT merge until a user
-# manually connects them.
+# Synthetic scenario (names are fictional): contract is registered as
+# "MB Voltarena", but the monthly source file was filled in with
+# "UAB Voltarena". Legal form is part of the matching key on purpose, so the
+# rows do NOT merge until a user manually connects them.
 $contractJson = @{
     sourceSystem = "PADContractFlow"
     exportedAt = "2026-05-18T10:30:00Z"
     rows = @(
-        @{ projectCode = "P1578"; objectNumber = "P1578-01"; subcontractorName = "MB Energostatas"; contractedAmount = 28000 },
-        @{ projectCode = "P1578"; objectNumber = "P1578-01"; subcontractorName = "UAB Aedilis"; contractedAmount = 5000 },
+        @{ projectCode = "P1578"; objectNumber = "P1578-01"; subcontractorName = "MB Voltarena"; contractedAmount = 28000 },
+        @{ projectCode = "P1578"; objectNumber = "P1578-01"; subcontractorName = "UAB Testora"; contractedAmount = 5000 },
         @{ projectCode = "P1578"; objectNumber = "P1578-02"; subcontractorName = "MB Kitas Objektas"; contractedAmount = 9000 }
     )
 } | ConvertTo-Json -Depth 8
@@ -29,8 +29,8 @@ $monthlyAprilJson = @{
     month = 4
     sheetName = "April"
     rows = @(
-        @{ sourceRow = 5; projectCode = "P1578-01"; objectNumber = "P1578-01"; subcontractorName = "UAB Energostatas"; objectName = "Cabling"; amountWithoutVat = 11800 },
-        @{ sourceRow = 6; projectCode = "P1578-01"; objectNumber = "P1578-01"; subcontractorName = "UAB Aedilis"; objectName = "Lighting"; amountWithoutVat = 1000 }
+        @{ sourceRow = 5; projectCode = "P1578-01"; objectNumber = "P1578-01"; subcontractorName = "UAB Voltarena"; objectName = "Cabling"; amountWithoutVat = 11800 },
+        @{ sourceRow = 6; projectCode = "P1578-01"; objectNumber = "P1578-01"; subcontractorName = "UAB Testora"; objectName = "Lighting"; amountWithoutVat = 1000 }
     )
     warnings = @()
 } | ConvertTo-Json -Depth 8
@@ -42,7 +42,7 @@ $monthlyMayJson = @{
     month = 5
     sheetName = "May"
     rows = @(
-        @{ sourceRow = 5; projectCode = "P1578-01"; objectNumber = "P1578-01"; subcontractorName = "MB Energostatas"; objectName = "Cabling"; amountWithoutVat = 5000 }
+        @{ sourceRow = 5; projectCode = "P1578-01"; objectNumber = "P1578-01"; subcontractorName = "MB Voltarena"; objectName = "Cabling"; amountWithoutVat = 5000 }
     )
     warnings = @()
 } | ConvertTo-Json -Depth 8
@@ -81,26 +81,26 @@ try {
         throw "Monthly import should insert 2 rows: $($monthly | ConvertTo-Json -Compress)"
     }
 
-    # Before linking: UAB Energostatas invoices fall through as imported-only.
+    # Before linking: UAB Voltarena invoices fall through as imported-only.
     $project = Invoke-RestMethod -Method Get -Uri "$baseUrl/api/projects/P1578-01/monthly-flow"
     $rows = @($project.contractRows)
     if ($rows.Count -ne 3) {
         throw "Expected 3 rows before linking (2 contracts + 1 unmatched), got $($rows.Count): $($rows | ConvertTo-Json -Depth 8 -Compress)"
     }
-    $unmatched = @($rows | Where-Object { $_.subcontractorName -eq "UAB Energostatas" -and $_.isImportedOnly })
+    $unmatched = @($rows | Where-Object { $_.subcontractorName -eq "UAB Voltarena" -and $_.isImportedOnly })
     if ($unmatched.Count -ne 1) {
-        throw "UAB Energostatas should be an unmatched imported-only row before linking."
+        throw "UAB Voltarena should be an unmatched imported-only row before linking."
     }
-    $mbRow = @($rows | Where-Object { $_.subcontractorName -eq "MB Energostatas" })[0]
+    $mbRow = @($rows | Where-Object { $_.subcontractorName -eq "MB Voltarena" })[0]
     if (-not $mbRow -or [decimal]$mbRow.invoiced -ne [decimal]0 -or -not $mbRow.rowKey) {
-        throw "MB Energostatas contract row should exist with 0 invoiced and a rowKey before linking: $($mbRow | ConvertTo-Json -Compress)"
+        throw "MB Voltarena contract row should exist with 0 invoiced and a rowKey before linking: $($mbRow | ConvertTo-Json -Compress)"
     }
 
     # Linking to a non-existing contract row must fail with 400.
     $badRequestFailed = $false
     try {
         Invoke-JsonPost "$baseUrl/api/projects/P1578/contract-links" (@{
-            sourceSubcontractorName = "UAB Energostatas"
+            sourceSubcontractorName = "UAB Voltarena"
             sourceObjectNumber = "P1578-01"
             targetContractRowKey = "no-such-row-key"
         } | ConvertTo-Json)
@@ -121,7 +121,7 @@ try {
     $crossObjectFailed = $false
     try {
         Invoke-JsonPost "$baseUrl/api/projects/P1578/contract-links" (@{
-            sourceSubcontractorName = "UAB Energostatas"
+            sourceSubcontractorName = "UAB Voltarena"
             sourceObjectNumber = "P1578-01"
             targetContractRowKey = $otherObjectContract.rowKey
         } | ConvertTo-Json)
@@ -136,7 +136,7 @@ try {
     $missingObjectFailed = $false
     try {
         Invoke-JsonPost "$baseUrl/api/projects/P1578/contract-links" (@{
-            sourceSubcontractorName = "UAB Energostatas"
+            sourceSubcontractorName = "UAB Voltarena"
             targetContractRowKey = $mbRow.rowKey
         } | ConvertTo-Json)
     } catch {
@@ -148,17 +148,17 @@ try {
 
     # Create the manual link.
     $link = Invoke-JsonPost "$baseUrl/api/projects/P1578/contract-links" (@{
-        sourceSubcontractorName = "UAB Energostatas"
+        sourceSubcontractorName = "UAB Voltarena"
         sourceObjectNumber = "P1578-01"
         targetContractRowKey = $mbRow.rowKey
     } | ConvertTo-Json)
-    if (-not $link.linked -or -not $link.id -or $link.targetName -ne "MB Energostatas") {
+    if (-not $link.linked -or -not $link.id -or $link.targetName -ne "MB Voltarena") {
         throw "Link creation failed: $($link | ConvertTo-Json -Compress)"
     }
 
     # Creating the same link twice must upsert, not duplicate or fail.
     $linkAgain = Invoke-JsonPost "$baseUrl/api/projects/P1578/contract-links" (@{
-        sourceSubcontractorName = "UAB Energostatas"
+        sourceSubcontractorName = "UAB Voltarena"
         sourceObjectNumber = "P1578-01"
         targetContractRowKey = $mbRow.rowKey
     } | ConvertTo-Json)
@@ -172,16 +172,16 @@ try {
     if ($rowsLinked.Count -ne 2) {
         throw "Expected 2 rows after linking, got $($rowsLinked.Count): $($rowsLinked | ConvertTo-Json -Depth 8 -Compress)"
     }
-    $mbLinked = @($rowsLinked | Where-Object { $_.subcontractorName -eq "MB Energostatas" })[0]
+    $mbLinked = @($rowsLinked | Where-Object { $_.subcontractorName -eq "MB Voltarena" })[0]
     if ([decimal]$mbLinked.invoiced -ne [decimal]11800 -or $mbLinked.isImportedOnly) {
-        throw "MB Energostatas should carry the linked 11800 invoiced: $($mbLinked | ConvertTo-Json -Compress)"
+        throw "MB Voltarena should carry the linked 11800 invoiced: $($mbLinked | ConvertTo-Json -Compress)"
     }
-    if (@($mbLinked.links).Count -ne 1 -or $mbLinked.links[0].sourceName -ne "UAB Energostatas") {
-        throw "MB Energostatas row should expose the manual link metadata: $($mbLinked.links | ConvertTo-Json -Compress)"
+    if (@($mbLinked.links).Count -ne 1 -or $mbLinked.links[0].sourceName -ne "UAB Voltarena") {
+        throw "MB Voltarena row should expose the manual link metadata: $($mbLinked.links | ConvertTo-Json -Compress)"
     }
-    $aedilis = @($rowsLinked | Where-Object { $_.subcontractorName -eq "UAB Aedilis" })[0]
-    if (@($aedilis.links).Count -ne 0) {
-        throw "UAB Aedilis must not pick up link metadata: $($aedilis.links | ConvertTo-Json -Compress)"
+    $testora = @($rowsLinked | Where-Object { $_.subcontractorName -eq "UAB Testora" })[0]
+    if (@($testora.links).Count -ne 0) {
+        throw "UAB Testora must not pick up link metadata: $($testora.links | ConvertTo-Json -Compress)"
     }
 
     # Next month the source file uses the contracted name: it must keep matching
@@ -195,9 +195,9 @@ try {
     if ($rowsMay.Count -ne 2) {
         throw "Fixed-name import must not create extra rows: got $($rowsMay.Count)."
     }
-    $mbMay = @($rowsMay | Where-Object { $_.subcontractorName -eq "MB Energostatas" })[0]
+    $mbMay = @($rowsMay | Where-Object { $_.subcontractorName -eq "MB Voltarena" })[0]
     if ([decimal]$mbMay.invoiced -ne [decimal]16800) {
-        throw "MB Energostatas should total 16800 (11800 linked + 5000 direct), got $($mbMay.invoiced)."
+        throw "MB Voltarena should total 16800 (11800 linked + 5000 direct), got $($mbMay.invoiced)."
     }
 
     # Removing the link restores the unmatched row but keeps the direct match.
@@ -210,13 +210,13 @@ try {
     if ($rowsUnlinked.Count -ne 3) {
         throw "Expected 3 rows after unlinking, got $($rowsUnlinked.Count)."
     }
-    $mbUnlinked = @($rowsUnlinked | Where-Object { $_.subcontractorName -eq "MB Energostatas" })[0]
+    $mbUnlinked = @($rowsUnlinked | Where-Object { $_.subcontractorName -eq "MB Voltarena" })[0]
     if ([decimal]$mbUnlinked.invoiced -ne [decimal]5000) {
-        throw "After unlinking MB Energostatas should keep only the direct 5000, got $($mbUnlinked.invoiced)."
+        throw "After unlinking MB Voltarena should keep only the direct 5000, got $($mbUnlinked.invoiced)."
     }
-    $uabUnlinked = @($rowsUnlinked | Where-Object { $_.subcontractorName -eq "UAB Energostatas" -and $_.isImportedOnly })
+    $uabUnlinked = @($rowsUnlinked | Where-Object { $_.subcontractorName -eq "UAB Voltarena" -and $_.isImportedOnly })
     if ($uabUnlinked.Count -ne 1 -or [decimal]$uabUnlinked[0].invoiced -ne [decimal]11800) {
-        throw "After unlinking UAB Energostatas should reappear as imported-only with 11800."
+        throw "After unlinking UAB Voltarena should reappear as imported-only with 11800."
     }
 
     # Deleting an unknown link id returns 404.

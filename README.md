@@ -37,7 +37,7 @@ dotnet restore
 dotnet run
 ```
 
-Atidarykite terminale parodytą `localhost` adresą. Jei `MONEY_FLOW_DB_PATH` nenurodytas, sukuriama ignoruojama `data/monthly-money-flow.db` DB. Tuščia schema sukuriama automatiškai.
+`MONEY_FLOW_API_KEY` reikalingas tik `POST /api/imports/*` užklausoms — be jo programa pasileidžia, o importai grąžina 503. Atidarykite terminale parodytą `localhost` adresą. Jei `MONEY_FLOW_DB_PATH` nenurodytas, DB sukuriama programos katalogo `data/` poaplankyje (su `dotnet run` tai `bin/Debug/net10.0/data/monthly-money-flow.db`; failas ignoruojamas git). Tuščia schema sukuriama automatiškai.
 
 ## Konfigūracija
 
@@ -46,9 +46,12 @@ Saugus struktūros pavyzdys yra [appsettings.example.json](appsettings.example.j
 | Nustatymas | Paskirtis |
 |---|---|
 | `MoneyFlow:DatabasePath` / `MONEY_FLOW_DB_PATH` | SQLite failo kelias |
-| `MoneyFlow:ApiKeyFilePath` | PAD importo API rakto failas |
-| `MONEY_FLOW_API_KEY` | Patogus tik lokalios plėtros rakto šaltinis |
+| `MoneyFlow:ApiKeyFilePath` | PAD importo API rakto failas (gamybos būdas) |
+| `MoneyFlow:ApiKey` | Raktas tiesiogiai konfigūracijoje (nerekomenduojama gamyboje) |
+| `MONEY_FLOW_API_KEY` | Rakto aplinkos kintamasis — patogiausias lokaliai plėtrai |
 | `Kestrel:Endpoints:Http:Url` / `ASPNETCORE_URLS` | Klausomas HTTP adresas |
+
+API rakto šaltinių prioritetas: failas (`ApiKeyFilePath`) → `MoneyFlow:ApiKey` → `MONEY_FLOW_API_KEY`.
 
 Gamyboje diegimo scenarijus naudoja `C:\ProgramData\PADS\MoneyFlow` duomenims ir `C:\Program Files\PADS\MoneyFlow` programai.
 
@@ -63,7 +66,9 @@ PAD turi siųsti `X-Api-Key` antraštę į abu importo endpointus. Užklausos k�
 | `GET /api/imports/monthly-flow/status` | Paskutinių importų būsena |
 | `GET /api/projects` | Projektų sąrašas |
 | `GET /api/projects/{code}/monthly-flow` | Projekto / objekto detalė |
+| `GET /api/projects/{code}/ignored-rows` | Rankiniu būdu ignoruotos eilutės |
 | `POST` / `DELETE /api/projects/...` | Patikimos LAN UI rankiniai susiejimai ir eilučių koregavimas |
+| `GET /api/diagnostics/subcontractors` | Subrangovų normalizavimo diagnostika (tik Development) |
 | `GET /health` | Proceso gyvumo patikra; DB netikrina |
 
 Importo validacija, deduplikavimas ir PAD klaidų elgsena aprašyti [docs/import-flow.md](docs/import-flow.md).
@@ -94,10 +99,12 @@ Scenarijus esamos gyvos DB neperrašo. Windows paslaugos, ugniasienės, reverse 
 ```powershell
 dotnet format --verify-no-changes
 dotnet build -c Release
+dotnet list PADS.MoneyFlow.Api.csproj package --vulnerable --include-transitive
+Get-ChildItem wwwroot,docs -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }
 Get-ChildItem tests -Filter *.ps1 | Sort-Object Name | ForEach-Object { & $_.FullName }
 ```
 
-`dotnet test` šiuo metu neranda atskiro testų projekto; elgsena tikrinama PowerShell integraciniais scenarijais su izoliuotomis testinėmis DB.
+Tos pačios patikros vykdomos CI (`.github/workflows/ci.yml`). `dotnet test` šiuo metu neranda atskiro testų projekto; elgsena tikrinama PowerShell integraciniais scenarijais su izoliuotomis testinėmis DB (kiekvienas testas pats pasileidžia serverį atskirame porte ir susikuria DB `test-data/` kataloge).
 
 ## Trikčių šalinimas
 

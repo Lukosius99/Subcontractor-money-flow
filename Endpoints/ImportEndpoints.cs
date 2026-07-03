@@ -84,7 +84,19 @@ internal static class ImportEndpoints
                 });
             }
 
+            var submittedRows = (importRequest.Rows?.Count ?? 0)
+                + (importRequest.ProjectValueRows?.Count ?? 0);
             var result = await store.ImportContractsAsync(importRequest, cancellationToken);
+            if (submittedRows > 0 && result.ImportedRows == 0)
+            {
+                // Rows were submitted but every one was rejected by validation —
+                // surface it as a failure so PAD alerts instead of reporting a
+                // silent success. (An empty snapshot stays an accepted no-op.)
+                result.Imported = false;
+                result.Success = false;
+                return Results.BadRequest(result);
+            }
+
             return Results.Ok(result);
         });
 
@@ -93,6 +105,9 @@ internal static class ImportEndpoints
             CancellationToken cancellationToken) =>
         {
             var imports = (await store.GetImportBatchesAsync(cancellationToken))
+                // Contract imports are recorded with Year = 0 / Month = 0; this
+                // endpoint reports monthly-flow imports only.
+                .Where(batch => batch.Year > 0 && batch.Month > 0)
                 .Select(batch => new ImportBatchResponse
                 {
                     SourceFileName = batch.SourceFileName,

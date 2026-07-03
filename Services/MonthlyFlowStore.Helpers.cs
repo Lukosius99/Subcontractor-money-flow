@@ -125,7 +125,13 @@ public sealed partial class MonthlyFlowStore
             .GroupBy(alias => alias.NormalizedKey, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => SubcontractorNormalizer.NormalizeSubcontractorName(group.First().CanonicalName),
+                // Deterministic winner when several aliases share a key: the
+                // most recently seen one, with Id as a stable tie-breaker.
+                group => SubcontractorNormalizer.NormalizeSubcontractorName(
+                    group.OrderByDescending(alias => alias.LastSeenAt)
+                        .ThenBy(alias => alias.Id)
+                        .First()
+                        .CanonicalName),
                 StringComparer.Ordinal);
     }
 

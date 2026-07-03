@@ -429,6 +429,15 @@ function cleanSubcontractorDisplayName(value) {
   return text || "(Be subrangovo)";
 }
 
+/* Lithuanian plural form: 1/21/31… → one, 2–9/22–29… → few, 0/10–20/30… → many. */
+function ltPlural(count, one, few, many) {
+  const mod10 = Math.abs(count) % 10;
+  const mod100 = Math.abs(count) % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && (mod100 < 11 || mod100 > 19)) return few;
+  return many;
+}
+
 function parseProjectObjectCode(value) {
   const cleaned = String(value ?? "").trim();
   const dashIndex = cleaned.lastIndexOf("-");
@@ -530,7 +539,7 @@ function renderSubPanelScope() {
   } else if (objects.length === 1) {
     scope = [`Objektas ${objects[0].objectNumber}`, objects[0].departmentCode].filter(Boolean).join(" · ");
   } else if (objects.length > 1) {
-    scope = `Visi objektai · ${objects.length} objekt${objects.length === 1 ? "as" : "ai"}`;
+    scope = `Visi objektai · ${objects.length} ${ltPlural(objects.length, "objektas", "objektai", "objektų")}`;
   }
 
   const hint = "Sutartys susietos su mėnesinėmis sąskaitomis, EUR be PVM. Spustelėkite eilutę, kad pamatytumėte detales.";
@@ -1109,7 +1118,7 @@ function renderAttentionStrip() {
   const reviewPart = document.createElement("span");
   const reviewCount = document.createElement("b");
   reviewCount.textContent = String(issues.length);
-  reviewPart.append("reikia peržiūrėti ", reviewCount, ` subrangov${issues.length === 1 ? "ą" : "us"}`);
+  reviewPart.append("reikia peržiūrėti ", reviewCount, ` ${ltPlural(issues.length, "subrangovą", "subrangovus", "subrangovų")}`);
   parts.push(reviewPart);
 
   if (overAmount > 0) {
@@ -1277,7 +1286,7 @@ function renderObjectScope() {
   const cards = [
     scopeCard({
       title: "Visi objektai",
-      sub: `${objects.length} objekt${objects.length === 1 ? "as" : "ai"} · visi padaliniai`,
+      sub: `${objects.length} ${ltPlural(objects.length, "objektas", "objektai", "objektų")} · visi padaliniai`,
       href: `/project.html?projectCode=${encodeURIComponent(parentProjectCode)}`,
       icon: "layers",
       summary: allSummary,
@@ -1810,7 +1819,7 @@ function renderContractTable(contractRows, monthKeys) {
 
   setText(tableCaption, `${periodRange(monthKeys)}`);
   setText(tableShowing, contractRows.length === baseContractRows.length
-    ? `Rodomi visi ${contractRows.length} subrangov${contractRows.length === 1 ? "as" : "ai"}`
+    ? `Rodomi visi ${contractRows.length} ${ltPlural(contractRows.length, "subrangovas", "subrangovai", "subrangovų")}`
     : `Rodoma ${contractRows.length} iš ${baseContractRows.length} subrangovų`);
 }
 
@@ -2010,8 +2019,8 @@ function buildContractsSheet(wb, ctx) {
   const ctxCell = ws.getCell(2, 1);
   ctxCell.value = [
     ctx.codeLabel, ctx.periodLabel,
-    `${ctx.rows.length} subrangov${ctx.rows.length === 1 ? "as" : "ai"}`,
-    clientRows.length ? `${clientRows.length} užsakovo eilut${clientRows.length === 1 ? "ė" : "ės"}` : ""
+    `${ctx.rows.length} ${ltPlural(ctx.rows.length, "subrangovas", "subrangovai", "subrangovų")}`,
+    clientRows.length ? `${clientRows.length} ${ltPlural(clientRows.length, "užsakovo eilutė", "užsakovo eilutės", "užsakovo eilučių")}` : ""
   ].filter(Boolean).join("  ·  ");
   ctxCell.font = { name: "Calibri", size: 10, color: { argb: XLSX_COLORS.inkSoft } };
   ws.mergeCells(2, 1, 2, lastCol);
@@ -2370,7 +2379,7 @@ function renderDrawer(summary) {
   if (summary.links.length > 0) {
     const chip = document.createElement("span");
     chip.className = "alias-chip";
-    chip.textContent = `${summary.links.length} alternatyv${summary.links.length === 1 ? "us pavadinimas" : "ūs pavadinimai"}`;
+    chip.textContent = `${summary.links.length} ${ltPlural(summary.links.length, "alternatyvus pavadinimas", "alternatyvūs pavadinimai", "alternatyvių pavadinimų")}`;
     title.append(chip);
   }
   /* identity chips: object, department, status; the colored top border and
@@ -2783,7 +2792,7 @@ function buildDepartmentSummaryRows(monthKeys) {
     tr.className = "is-department-row";
     if (selectedSummaryKey && summaryKey(summary) === selectedSummaryKey) tr.classList.add("is-selected");
 
-    appendTextCell(tr, objects.length === 1 ? objects[0] : `${objects.length} objekt${objects.length === 1 ? "as" : "ai"}`, "col-code");
+    appendTextCell(tr, objects.length === 1 ? objects[0] : `${objects.length} ${ltPlural(objects.length, "objektas", "objektai", "objektų")}`, "col-code");
     appendTextCell(tr, entry.dept || "—", entry.dept ? "col-code" : "cell-quiet");
     const nameCell = appendTextCell(tr, clientName, "subcontractor-name");
     const badge = document.createElement("span");
@@ -2916,7 +2925,7 @@ function renderObjectClientValues(monthKeys) {
   const totalProjectValue = [...objectValueByObject.values()]
     .reduce((sum, row) => sum + numberValue(row.projectValueAmount), 0);
   const totalClientValue = rows.reduce((sum, row) => sum + numberValue(row.totalClientValue), 0);
-  setText(objectValueSummary, `${rows.length} eilut${rows.length === 1 ? "ė" : "ės"} · ${money(totalClientValue)} užsakovo / ${money(totalProjectValue)} projekto vertė`);
+  setText(objectValueSummary, `${rows.length} ${ltPlural(rows.length, "eilutė", "eilutės", "eilučių")} · ${money(totalClientValue)} užsakovo / ${money(totalProjectValue)} projekto vertė`);
 
   const table = document.createElement("table");
   table.className = "imported-table source-table";
@@ -2979,7 +2988,7 @@ function isSmdRow(row) {
 }
 
 function renderImportedRows(monthKeys) {
-  setText(importedRowsSummary, `${allRows.length} eilut${allRows.length === 1 ? "ė" : "ės"} · ${periodRange(monthKeys)}`);
+  setText(importedRowsSummary, `${allRows.length} ${ltPlural(allRows.length, "eilutė", "eilutės", "eilučių")} · ${periodRange(monthKeys)}`);
 
   const sections = monthGroups.map((group) => {
     const rows = group.rows ?? [];
@@ -2993,7 +3002,7 @@ function renderImportedRows(monthKeys) {
     const total = rows.reduce((sum, row) => sum + numberValue(row.amountWithoutVat), 0);
     const sheets = [...new Set(rows.map(row => row.sourceSheet).filter(Boolean))];
     const meta = document.createElement("span");
-    meta.textContent = `${rows.length} eilut${rows.length === 1 ? "ė" : "ės"} · ${sheets.length || 1} šaltin${sheets.length === 1 ? "is" : "iai"} · ${money(total)} EUR`;
+    meta.textContent = `${rows.length} ${ltPlural(rows.length, "eilutė", "eilutės", "eilučių")} · ${sheets.length || 1} ${ltPlural(sheets.length || 1, "šaltinis", "šaltiniai", "šaltinių")} · ${money(total)} EUR`;
     heading.append(title, meta);
 
     const tableWrap = document.createElement("div");
@@ -3071,7 +3080,7 @@ async function loadProject() {
   const parentProjectCode = parsedProject.parentProjectCode;
   setText(projectCodeHeading, selectedObjectNumber || parentProjectCode);
   setText(breadcrumbProject, selectedObjectNumber || parentProjectCode);
-  document.title = `${selectedObjectNumber || parentProjectCode} | Mėnesinis pinigų srautas`;
+  document.title = `${selectedObjectNumber || parentProjectCode} | Pinigų srautas`;
 
   try {
     const detailUrl = new URL(`/api/projects/${encodeURIComponent(parentProjectCode)}/monthly-flow`, window.location.origin);

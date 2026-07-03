@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using PADS.MoneyFlow.Api.Dtos;
 using PADS.MoneyFlow.Api.Models;
@@ -418,7 +419,14 @@ public sealed class MonthlyFlowImportService
             return false;
         }
 
-        if (!DateTimeOffset.TryParse(element.GetString(), out var parsed))
+        // Invariant culture + AssumeUniversal so the same export parses
+        // identically on a dev laptop and on the Windows service regardless of
+        // host locale; offset-less timestamps are treated as UTC.
+        if (!DateTimeOffset.TryParse(
+                element.GetString(),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal,
+                out var parsed))
         {
             return false;
         }

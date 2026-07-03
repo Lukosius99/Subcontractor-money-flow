@@ -37,3 +37,11 @@ Programoje nėra atskiro frontend serverio, eilės ar išorinės DB. Tai sąmoni
 Programa startuodama iškviečia `EnsureCreatedAsync` ir idempotentinius `SchemaInitializer` pakeitimus. Atskiro migracijų katalogo šiuo metu nėra. Dėl to schemos pakeitimas turi būti suderinamas su jau esančia DB ir patikrintas bent viena senesnės kopijos restauravimo repeticija.
 
 Interaktyvi vizualizacija yra [subrangos-duomenu-kelias-3d](subrangos-duomenu-kelias-3d/index.html). Ji naudoja išorinį `unpkg.com` skriptą ir yra dokumentacijos priedas, ne gamybinės programos dalis.
+
+## Žinomi apribojimai
+
+Sąmoningi dabartinės apimties kompromisai, kuriuos verta žinoti prieš plečiant sistemą:
+
+- **Mastelis.** Projekto detalės užklausos užkrauna visas `MonthlyFlowRows` / `SubcontractorContracts` lenteles į atmintį ir filtruoja ten, o kiekvienas skaitymas kviečia idempotentinį `SchemaInitializer`. Dabartinei skyriaus duomenų apimčiai to pakanka, bet augant eilučių skaičiui verta perkelti filtravimą į SQL ir schemos patikras palikti tik startui.
+- **`externalContractLineId` nenaudojamas rakte.** Dvi sutarčių eilutės su tuo pačiu projektu, objektu ir subrangovu suglaudinamos į vieną (antrosios suma perrašo pirmąją). Įtraukus ID į `RowKey`, esamoms DB reikėtų duomenų migracijos, todėl tai palikta sąmoningai — PAD šaltinis tokių dublikatų nesiunčia.
+- **Migracijų nėra.** Schemos pokyčiai daromi idempotentiškai per `SchemaInitializer`; žr. skyrių aukščiau.

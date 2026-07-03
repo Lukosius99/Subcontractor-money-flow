@@ -31,7 +31,7 @@ function Start-TestServer {
     $env:ASPNETCORE_ENVIRONMENT = "Development"
     $env:MONEY_FLOW_DB_PATH = $dbPath
     $env:MONEY_FLOW_API_KEY = $apiKey
-    $process = Start-Process dotnet -ArgumentList "run -c Release --no-build --urls $baseUrl" -WorkingDirectory $projectRoot -PassThru -WindowStyle Hidden
+    $process = Start-Process -FilePath "dotnet" -ArgumentList "run --urls $baseUrl" -WorkingDirectory $projectRoot -PassThru -WindowStyle Hidden
     Wait-Ready
     return $process
 }
