@@ -8,14 +8,14 @@ Vidinė įmonės LAN programa, skirta subrangovų mėnesiniams pinigų srautams 
 
 Interaktyvi schemos versija saugoma [docs/subrangos-duomenu-kelias-3d](docs/subrangos-duomenu-kelias-3d/index.html). Jos neviešinkite per public GitHub Pages, jei vidinių sistemų pavadinimai nėra skirti viešumai.
 
-## Architektūra
+## Kaip veikia
 
 ```text
 SharePoint Excel → Power Automate Cloud Flow → JSON → Power Automate Desktop
     → vietinis ASP.NET Core API → SQLite → statinė naršyklės sąsaja
 ```
 
-API ir UI yra vienas ASP.NET Core procesas. Programos duomenys laikomi vietiniame SQLite faile; repozitorijoje nėra darbinės ar pradinės duomenų bazės. Išsamiau: [architektūra](docs/architecture.md) ir [importo eiga](docs/import-flow.md).
+API ir UI yra vienas ASP.NET Core procesas: jis priima PAD importus, saugo duomenis vietiniame SQLite faile ir pateikia naršyklės sąsają. Repozitorijoje nėra darbinės ar pradinės duomenų bazės. Išsamiau: [architektūra](docs/architecture.md) ir [importo eiga](docs/import-flow.md).
 
 ## Technologijos
 
@@ -25,19 +25,94 @@ API ir UI yra vienas ASP.NET Core procesas. Programos duomenys laikomi vietiniam
 - ExcelJS eksportui į `.xlsx` (lokali minifikuota kopija)
 - PowerShell integraciniams testams ir Windows diegimui
 
-## Vietinis paleidimas
+## Reikalavimai
 
-Reikia .NET 10 SDK. Node.js naudojamas tik JavaScript sintaksės patikrai.
+| Įrankis | Kam reikalingas | Patikra |
+|---|---|---|
+| .NET 10 SDK | Visada — build, paleidimui ir diegimui | `dotnet --version` → `10.x` |
+| Git | Repozitorijai klonuoti / atnaujinti | `git --version` |
+| Node.js | Tik JavaScript sintaksės patikroms (nebūtina) | `node --version` |
+| Windows + administratoriaus teisės | Tik gamybos diegimui į serverį | — |
+
+---
+
+## 1. Vietinis paleidimas (plėtrai ir peržiūrai)
+
+**1 žingsnis.** Klonuokite repozitoriją:
 
 ```powershell
 git clone https://github.com/Lukosius99/Subcontractor-money-flow.git
 cd Subcontractor-money-flow
+```
+
+**2 žingsnis.** (Nebūtina) Nustatykite importo API raktą. Jis reikalingas tik `POST /api/imports/*` užklausoms — be jo programa pasileidžia ir UI veikia, tik importai grąžina 503:
+
+```powershell
 $env:MONEY_FLOW_API_KEY = "dev-only-key-at-least-16-chars"
-dotnet restore
+```
+
+**3 žingsnis.** Paleiskite programą:
+
+```powershell
 dotnet run
 ```
 
-`MONEY_FLOW_API_KEY` reikalingas tik `POST /api/imports/*` užklausoms — be jo programa pasileidžia, o importai grąžina 503. Atidarykite terminale parodytą `localhost` adresą. Jei `MONEY_FLOW_DB_PATH` nenurodytas, DB sukuriama programos katalogo `data/` poaplankyje (su `dotnet run` tai `bin/Debug/net10.0/data/monthly-money-flow.db`; failas ignoruojamas git). Tuščia schema sukuriama automatiškai.
+**4 žingsnis.** Atidarykite naršyklėje terminale parodytą `localhost` adresą.
+
+**5 žingsnis.** Pirmo paleidimo metu automatiškai sukuriama tuščia DB (jei `MONEY_FLOW_DB_PATH` nenurodytas — programos katalogo `data/` poaplankyje, su `dotnet run` tai `bin/Debug/net10.0/data/monthly-money-flow.db`; failas ignoruojamas git). Projektų sąrašas bus tuščias, kol neatliktas pirmas importas — importo formatas aprašytas [docs/import-flow.md](docs/import-flow.md), o veikiančio pavyzdžio galima pasižiūrėti bet kuriame `tests/*.ps1` scenarijuje.
+
+---
+
+## 2. Diegimas gamybos serveryje (Windows LAN)
+
+**1 žingsnis.** Serveryje įdiekite .NET 10 SDK ir klonuokite (arba `git pull` atnaujinkite) repozitoriją.
+
+**2 žingsnis.** Administratoriaus PowerShell lange, repozitorijos kataloge, paleiskite diegimo skriptą:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Deploy-MoneyFlow.ps1
+```
+
+Skriptas automatiškai:
+
+- publikuoja programą į `C:\Program Files\PADS\MoneyFlow`;
+- sukuria ir paleidžia Windows paslaugą `MoneyFlow` (portas 5000);
+- paruošia duomenų aplanką `C:\ProgramData\PADS\MoneyFlow` (esamos gyvos DB **niekada neperrašo**);
+- sukuria ugniasienės taisyklę TCP 5000 (tik Domain ir Private profiliai);
+- pabaigoje patikrina `http://localhost:5000/health`.
+
+Jei naujam serveriui reikia pradėti nuo patikrintos išorinės DB kopijos:
+
+```powershell
+.\Deploy-MoneyFlow.ps1 -InitialDatabase "D:\SecureBackups\monthly-money-flow.db"
+```
+
+**3 žingsnis.** Nustatykite PAD importo API raktą (užtenka paprasto vartotojo teisių; paslaugos perkrauti nereikia):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\Program Files\PADS\MoneyFlow\Set-MoneyFlowApiKey.ps1"
+```
+
+Tą patį raktą Power Automate Desktop turi siųsti `X-Api-Key` antraštėje.
+
+**4 žingsnis.** Patikrinkite, kad viskas veikia:
+
+- `http://localhost:5000/health` atsako sėkmingai;
+- naršyklėje atsidaro `http://<serverio-IP>:5000` projektų sąrašas;
+- po pirmo PAD importo `GET /api/imports/monthly-flow/status` rodo importo būseną.
+
+**5 žingsnis.** (Tinklo administratorius) Vidinis DNS vardas, reverse proxy ir prieigos ribojimai — žr. [docs/deployment.md](docs/deployment.md).
+
+### Atnaujinimas
+
+```powershell
+git pull
+powershell -ExecutionPolicy Bypass -File .\Deploy-MoneyFlow.ps1
+```
+
+Skriptas sustabdo paslaugą, pakeičia programos failus, palieka gyvą DB ir vėl paleidžia paslaugą. Naršyklės naują UI versiją pasiima automatiškai.
+
+---
 
 ## Konfigūracija
 
@@ -80,19 +155,7 @@ Importo validacija, deduplikavimas ir PAD klaidų elgsena aprašyti [docs/import
 - Prieš kopijuojant DB sustabdykite paslaugą arba naudokite SQLite backup mechanizmą; vien pagrindinio failo kopija aktyvaus WAL režimo metu gali būti nepilna.
 - Atsargines kopijas laikykite už repo ribų su prieiga tik administratoriui.
 
-## Diegimas Windows LAN serveryje
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\Deploy-MoneyFlow.ps1
-```
-
-Pirmo paleidimo metu programa sukurs tuščią DB. Jei naujam serveriui reikia atkurti patikrintą išorinę DB kopiją:
-
-```powershell
-.\Deploy-MoneyFlow.ps1 -InitialDatabase "D:\SecureBackups\monthly-money-flow.db"
-```
-
-Scenarijus esamos gyvos DB neperrašo. Windows paslaugos, ugniasienės, reverse proxy ir atkūrimo gairės: [docs/deployment.md](docs/deployment.md).
+Atsarginių kopijų ir atkūrimo procedūra žingsnis po žingsnio: [docs/deployment.md](docs/deployment.md).
 
 ## Patikros
 
@@ -108,7 +171,7 @@ Tos pačios patikros vykdomos CI (`.github/workflows/ci.yml`). `dotnet test` ši
 
 ## Trikčių šalinimas
 
-Trumpi sprendimai pateikti [docs/troubleshooting.md](docs/troubleshooting.md). Diegimo aplinkoje pirmiausia tikrinkite Windows paslaugą, `http://localhost:5000/health`, 5000 prievadą ir `ProgramData` aplanko teises.
+Trumpi sprendimai pateikti [docs/troubleshooting.md](docs/troubleshooting.md). Diegimo aplinkoje pirmiausia tikrinkite Windows paslaugą (`Get-Service MoneyFlow`), `http://localhost:5000/health`, 5000 prievadą ir `ProgramData` aplanko teises.
 
 ## Saugumas ir projekto būsena
 
