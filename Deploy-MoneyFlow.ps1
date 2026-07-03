@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [switch]$ReplaceDatabase
+    [string]$InitialDatabase
 )
 
 $ErrorActionPreference = 'Stop'
@@ -9,7 +9,7 @@ $ProgressPreference = 'SilentlyContinue'
 function Write-Step([string]$Message) { Write-Host "`n==> $Message" -ForegroundColor Cyan }
 function Stop-WithError([string]$Message) {
     Write-Host "`nKLAIDA: $Message" -ForegroundColor Red
-    Write-Host "Diegimas nebaigtas. Pagalba: DEPLOYMENT.md" -ForegroundColor Yellow
+    Write-Host "Diegimas nebaigtas. Pagalba: docs\deployment.md" -ForegroundColor Yellow
     Read-Host 'Paspauskite Enter, kad uždarytumėte'
     exit 1
 }
@@ -19,7 +19,9 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
-    if ($ReplaceDatabase) { $arguments += '-ReplaceDatabase' }
+    if (-not [string]::IsNullOrWhiteSpace($InitialDatabase)) {
+        $arguments += @('-InitialDatabase', "`"$InitialDatabase`"")
+    }
     Write-Host 'Prašoma administratoriaus teisių...' -ForegroundColor Yellow
     Start-Process powershell.exe -Verb RunAs -ArgumentList $arguments
     exit
@@ -27,21 +29,31 @@ if (-not $isAdmin) {
 
 $repoRoot = $PSScriptRoot
 $projectFile = Join-Path $repoRoot 'PADS.MoneyFlow.Api.csproj'
-$seedDatabase = Join-Path $repoRoot 'seed\monthly-money-flow.db'
 $installDirectory = Join-Path $env:ProgramFiles 'PADS\MoneyFlow'
 $executable = Join-Path $installDirectory 'PADS.MoneyFlow.Api.exe'
 $stagingDirectory = Join-Path $env:TEMP ("MoneyFlow-publish-{0}" -f [guid]::NewGuid().ToString('N'))
 $dataDirectory = Join-Path $env:ProgramData 'PADS\MoneyFlow'
 $liveDatabase = Join-Path $dataDirectory 'monthly-money-flow.db'
-$backupDirectory = Join-Path $dataDirectory 'Backups'
 $configurationDirectory = Join-Path $dataDirectory 'Configuration'
 $serviceName = 'MoneyFlow'
 $serviceRegistryKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName"
 $firewallRuleName = 'MoneyFlow LAN (TCP 5000)'
 
 if (-not (Test-Path -LiteralPath $projectFile)) { Stop-WithError "Nerastas projektas: $projectFile" }
-if (-not (Test-Path -LiteralPath $seedDatabase)) { Stop-WithError "Nerasta pradinė duomenų bazė: $seedDatabase" }
-if ((Get-Item -LiteralPath $seedDatabase).Length -eq 0) { Stop-WithError 'Pradinė duomenų bazė yra tuščias failas.' }
+if (-not [string]::IsNullOrWhiteSpace($InitialDatabase)) {
+    if (-not (Test-Path -LiteralPath $InitialDatabase -PathType Leaf)) {
+        Stop-WithError "Nerasta nurodyta pradinė duomenų bazė: $InitialDatabase"
+    }
+    $InitialDatabase = (Resolve-Path -LiteralPath $InitialDatabase).Path
+    if ((Get-Item -LiteralPath $InitialDatabase).Length -eq 0) {
+        Stop-WithError 'Nurodyta pradinė duomenų bazė yra tuščias failas.'
+    }
+    foreach ($suffix in @('-wal', '-shm', '-journal')) {
+        if (Test-Path -LiteralPath ($InitialDatabase + $suffix)) {
+            Stop-WithError "Šalia pradinės DB yra aktyvus SQLite failas '$suffix'. Pirmiausia saugiai uždarykite DB naudojančią programą."
+        }
+    }
+}
 
 Write-Host 'MoneyFlow diegimas' -ForegroundColor Green
 Write-Host "Programa: $installDirectory"
@@ -107,20 +119,15 @@ try {
     Set-Acl -LiteralPath $configurationDirectory -AclObject $acl
     Write-Host '[GERAI] Paruoštas API rakto aplankas ne administratoriaus scenarijui.' -ForegroundColor Green
     if (Test-Path -LiteralPath $liveDatabase) {
-        if ($ReplaceDatabase) {
-            New-Item -ItemType Directory -Path $backupDirectory -Force | Out-Null
-            $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-            $backup = Join-Path $backupDirectory "monthly-money-flow-before-replace-$stamp.db"
-            Copy-Item -LiteralPath $liveDatabase -Destination $backup -Force
-            Copy-Item -LiteralPath $seedDatabase -Destination $liveDatabase -Force
-            Write-Host "[GERAI] Senoji DB išsaugota: $backup" -ForegroundColor Green
-            Write-Host '[GERAI] DB tyčia pakeista repo pradine kopija.' -ForegroundColor Green
-        } else {
-            Write-Host '[GERAI] Esama DB palikta nepakeista.' -ForegroundColor Green
+        Write-Host '[GERAI] Esama DB palikta nepakeista.' -ForegroundColor Green
+        if (-not [string]::IsNullOrWhiteSpace($InitialDatabase)) {
+            Write-Warning '-InitialDatabase nepanaudota, nes gyva DB jau yra. Atkurkite atsarginę kopiją tik pagal docs\deployment.md.'
         }
+    } elseif (-not [string]::IsNullOrWhiteSpace($InitialDatabase)) {
+        Copy-Item -LiteralPath $InitialDatabase -Destination $liveDatabase -Force
+        Write-Host '[GERAI] Pirmo diegimo DB atkurta iš nurodyto išorinio failo.' -ForegroundColor Green
     } else {
-        Copy-Item -LiteralPath $seedDatabase -Destination $liveDatabase -Force
-        Write-Host '[GERAI] Pirmo diegimo DB atkurta iš seed\monthly-money-flow.db.' -ForegroundColor Green
+        Write-Host '[GERAI] Gyvos DB nėra; programa pirmo paleidimo metu sukurs tuščią DB.' -ForegroundColor Green
     }
 
     Write-Step 'Windows paslaugos konfigūravimas'
@@ -163,7 +170,7 @@ try {
     Write-Host '  http://localhost:5000'
     Write-Host "  http://${computerName}:5000"
     foreach ($ip in $lanIps) { Write-Host "  http://${ip}:5000" }
-    Write-Host "`nktpads.lt nustatymus turi atlikti tinklo administratorius (žr. DEPLOYMENT.md)." -ForegroundColor Cyan
+    Write-Host "`nVidinio DNS ir reverse proxy nustatymus turi atlikti tinklo administratorius (žr. docs\deployment.md)." -ForegroundColor Cyan
     if (-not (Test-Path -LiteralPath (Join-Path $configurationDirectory 'api-key.txt'))) {
         Write-Host "`nKITAS ŽINGSNIS: paprastas vartotojas turi paleisti Set-MoneyFlowApiKey.ps1." -ForegroundColor Yellow
     }
@@ -171,7 +178,7 @@ try {
 catch {
     Write-Host "`nKLAIDA: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host "Paslaugos būsena: $((Get-Service -Name $serviceName -ErrorAction SilentlyContinue).Status)" -ForegroundColor Yellow
-    Write-Host 'Žr. DEPLOYMENT.md trikčių šalinimo skyrių.' -ForegroundColor Yellow
+    Write-Host 'Žr. docs\deployment.md ir docs\troubleshooting.md.' -ForegroundColor Yellow
     Read-Host 'Paspauskite Enter, kad uždarytumėte'
     exit 1
 }

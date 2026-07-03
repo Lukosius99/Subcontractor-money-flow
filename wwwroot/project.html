@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Projektas | Pinigų srautas</title>
   <link rel="preload" href="/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/styles.css?v=20260623-brand-kt2">
+  <link rel="stylesheet" href="/styles.css?v=20260702-column-resize-v1">
   <script src="/vendor-exceljs.min.js" defer></script>
-  <script src="/project.js?v=20260623-xlsx2" defer></script>
+  <script src="/project.js?v=20260702-column-resize-v1" defer></script>
   <script src="/nav.js?v=20260623-brand-kt2" defer></script>
 </head>
 <body class="detail-page">
@@ -120,7 +120,7 @@
               </div>
             </div>
             <div class="table-wrap">
-              <table class="contract-table">
+              <table id="contractTable" class="contract-table">
                 <thead id="contractTableHead"></thead>
                 <tbody id="contractTableBody"></tbody>
                 <tfoot id="contractTableFoot"></tfoot>
@@ -161,6 +161,10 @@
     <span>Pinigų srautas</span>
     <span class="app-footer-sep">&middot;</span>
     <span id="footerImportText">Paskutinis importas: &mdash;</span>
+    <button id="ignoredRowsButton" class="btn footer-ignored-button" type="button" title="Peržiūrėti į sumas neįtrauktas eilutes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/><path d="M9 11l6 6M15 11l-6 6"/></svg>
+      Neįtrauktos eilutės <span id="ignoredRowsBadge" class="ignored-count" hidden></span>
+    </button>
   </footer>
 
   <button id="drawerBackdrop" class="drawer-backdrop" type="button" aria-label="Uždaryti informacijos skydelį" tabindex="-1"></button>

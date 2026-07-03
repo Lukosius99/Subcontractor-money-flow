@@ -11,7 +11,7 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dbPath) | Out-Nul
 
 function New-ContractJson($tetasAmount) {
     @{
-        sourceSystem = "DynamicsAX2009"
+        sourceSystem = "PADContractFlow"
         exportedAt = "2026-05-18T10:30:00Z"
         rows = @(
             @{
@@ -51,7 +51,7 @@ function New-ContractJson($tetasAmount) {
 function New-ContractJsonV13() {
     @{
         schemaVersion = "1.3"
-        sourceSystem = "SharePointContractedExcel"
+        sourceSystem = "PADContractFlow"
         sourceSheets = @("kontraktai", "P verte")
         contractRowCount = 1
         projectValueRowCount = 1
@@ -409,10 +409,10 @@ try {
         throw "Project detail did not reflect TETas object-number contract update from 4 to 40: $($tetasAfterUpdate | ConvertTo-Json -Depth 8 -Compress)"
     }
 
-    $projectAfterDynamicsUpdate = Invoke-RestMethod -Method Get -Uri "$baseUrl/api/projects/P1730-01/monthly-flow"
-    $krsAfterDynamicsUpdate = @($projectAfterDynamicsUpdate.contractRows) | Where-Object { $_.objectNumber -eq "001" }
-    if ($krsAfterDynamicsUpdate.objectName -ne "Laikinas dangos zenklinimas from monthly" -or $projectAfterDynamicsUpdate.projectName -ne "Monthly Project Name") {
-        throw "Dynamics re-import must not clear monthly display fields: $($projectAfterDynamicsUpdate | ConvertTo-Json -Depth 8 -Compress)"
+    $projectAfterPadUpdate = Invoke-RestMethod -Method Get -Uri "$baseUrl/api/projects/P1730-01/monthly-flow"
+    $krsAfterPadUpdate = @($projectAfterPadUpdate.contractRows) | Where-Object { $_.objectNumber -eq "001" }
+    if ($krsAfterPadUpdate.objectName -ne "Laikinas dangos zenklinimas from monthly" -or $projectAfterPadUpdate.projectName -ne "Monthly Project Name") {
+        throw "PAD re-import must not clear monthly display fields: $($projectAfterPadUpdate | ConvertTo-Json -Depth 8 -Compress)"
     }
 
     "Contract import integration checks passed."

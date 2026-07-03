@@ -149,7 +149,23 @@ public sealed record ProjectContractDetailRow(
     bool IsImportedOnly,
     string? RowKey,
     string? Warning,
-    IReadOnlyCollection<ManualContractLinkInfo> Links);
+    IReadOnlyCollection<ManualContractLinkInfo> Links,
+    IReadOnlyCollection<MonthlyRowDetail> SourceRows);
+
+public sealed record MonthlyRowDetail(
+    Guid Id,
+    int Year,
+    int Month,
+    string ProjectCode,
+    string? ObjectNumber,
+    string? SubcontractorName,
+    string? CustomerName,
+    string? ObjectName,
+    decimal AmountWithoutVat,
+    string? SourceSheet,
+    int SourceRow,
+    string? Responsible,
+    string? Engineer);
 
 public sealed record ManualContractLinkInfo(Guid Id, string SourceName, string TargetName);
 
