@@ -32,10 +32,10 @@ Dar kartą paleiskite tą pačią komandą be `-InitialDatabase`. Scenarijus sus
 
 ## Atsarginė kopija ir atkūrimas
 
-Paprasčiausias kelias — paruošti scenarijai repo šaknyje (abu patys pasiprašo administratoriaus teisių):
+Paprasčiausias kelias — paruošti scenarijai repo šaknyje:
 
-- `Backup-MoneyFlowDb.bat` — sustabdo paslaugą, nukopijuoja DB į `C:\ProgramData\PADS\MoneyFlow\Backups` (laikoma 30 naujausių), vėl paleidžia paslaugą, patikrina `/health` ir naujausią kopiją įkelia į `db-backups/monthly-money-flow-latest.db` repozitorijoje.
-- `Restore-MoneyFlowDb.bat` — parodo rastas kopijas, prieš atstatymą dabartinę DB išsaugo kaip `pre-restore-*`, atstato pasirinktą kopiją ir patikrina `/health`.
+- `Backup-MoneyFlowDb.bat` — administratoriaus teisių nereikia. Paprašo API rakto (to paties kaip importų) ir per `POST /api/maintenance/db-backup` sukuria vientisą kopiją SQLite `VACUUM INTO` mechanizmu nestabdant paslaugos: kopija atsiranda `C:\ProgramData\PADS\MoneyFlow\Backups` (serveris laiko 30 naujausių), o naujausia įkeliama į `db-backups/monthly-money-flow-latest.db` repozitorijoje. Jei paslauga tuo metu neveikia, DB failas nukopijuojamas tiesiogiai (tai saugu, nes niekas nerašo).
+- `Restore-MoneyFlowDb.bat` — parodo rastas kopijas, prieš atstatymą dabartinę DB išsaugo kaip `pre-restore-*`, atstato pasirinktą kopiją ir patikrina `/health`. Administratoriaus teisių pasiprašo tik jei įdiegta paslauga (ją reikia sustabdyti ir paleisti).
 
 Rankinė procedūra (jei scenarijų naudoti negalima):
 
