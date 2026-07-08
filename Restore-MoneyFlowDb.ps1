@@ -21,10 +21,12 @@ function Stop-WithError([string]$Message) {
     Wait-Exit 1
 }
 
-# Serviso stabdymui reikia administratoriaus teisių.
+# Administratoriaus teisių reikia tik servisui sustabdyti/paleisti. Jei servisas
+# neįdiegtas (pvz., atstatoma šviežiame kompiuteryje prieš diegimą), teisių neprašoma.
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
+$serviceInstalled = [bool](Get-Service -Name 'MoneyFlow' -ErrorAction SilentlyContinue)
+if ($serviceInstalled -and -not $isAdmin) {
     $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
     if (-not [string]::IsNullOrWhiteSpace($BackupFile)) { $arguments += @('-BackupFile', "`"$BackupFile`"") }
     if ($NoPause) { $arguments += '-NoPause' }

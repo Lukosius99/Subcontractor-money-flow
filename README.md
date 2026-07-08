@@ -132,13 +132,14 @@ Gamyboje diegimo scenarijus naudoja `C:\ProgramData\PADS\MoneyFlow` duomenims ir
 
 ## Importai ir pagrindiniai endpointai
 
-PAD turi siųsti `X-Api-Key` antraštę į abu importo endpointus. Užklausos kūnas ribojamas iki 10 MB.
+PAD turi siųsti `X-Api-Key` antraštę į abu importo endpointus; ta pati antraštė saugo ir `POST /api/maintenance/*`. Užklausos kūnas ribojamas iki 10 MB.
 
 | Metodas ir kelias | Paskirtis |
 |---|---|
 | `POST /api/imports/monthly-flow` | Mėnesinio srauto JSON importas |
 | `POST /api/imports/contracts` | Sutarčių ir projektų verčių importas |
 | `GET /api/imports/monthly-flow/status` | Paskutinių importų būsena |
+| `POST /api/maintenance/db-backup` | Vientisa DB kopija (`VACUUM INTO`) į `Backups` katalogą |
 | `GET /api/projects` | Projektų sąrašas |
 | `GET /api/projects/{code}/monthly-flow` | Projekto / objekto detalė |
 | `GET /api/projects/{code}/ignored-rows` | Rankiniu būdu ignoruotos eilutės |
@@ -151,8 +152,8 @@ Importo validacija, deduplikavimas ir PAD klaidų elgsena aprašyti [docs/import
 ## Duomenų bazė ir atsarginės kopijos
 
 - Gyva DB yra `C:\ProgramData\PADS\MoneyFlow\monthly-money-flow.db` — į repo ji nepatenka ir išgyvena atnaujinimus.
-- **`Backup-MoneyFlowDb.bat`** — trumpam sustabdo paslaugą, padaro datuotą kopiją į `C:\ProgramData\PADS\MoneyFlow\Backups` (laikoma 30 naujausių) ir naujausią kopiją įkelia į `db-backups/monthly-money-flow-latest.db` šioje repozitorijoje (senesnės versijos lieka git istorijoje).
-- **`Restore-MoneyFlowDb.bat`** — parodo rastas kopijas (lokalias ir iš `db-backups`) ir atstato pasirinktą; prieš tai dabartinė DB išsaugoma kaip `pre-restore-*` kopija.
+- **`Backup-MoneyFlowDb.bat`** — veikia be administratoriaus teisių: paprašo API rakto ir per `POST /api/maintenance/db-backup` (SQLite `VACUUM INTO`) padaro vientisą datuotą kopiją į `C:\ProgramData\PADS\MoneyFlow\Backups` (laikoma 30 naujausių) nestabdant paslaugos, tada naujausią kopiją įkelia į `db-backups/monthly-money-flow-latest.db` šioje repozitorijoje (senesnės versijos lieka git istorijoje). Jei paslauga neveikia, DB failas tiesiog nukopijuojamas.
+- **`Restore-MoneyFlowDb.bat`** — parodo rastas kopijas (lokalias ir iš `db-backups`) ir atstato pasirinktą; prieš tai dabartinė DB išsaugoma kaip `pre-restore-*` kopija. Administratoriaus teisių paprašo tik tada, kai reikia sustabdyti/paleisti įdiegtą paslaugą.
 - Darbiniai `*.db`, `*-wal`, `*-shm` ir `*-journal` failai ignoruojami; vienintelė išimtis — `db-backups/monthly-money-flow-latest.db*`.
 - Kitų tikrų įmonės ar SharePoint eksporto duomenų į repo nedėti.
 
