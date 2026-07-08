@@ -92,16 +92,18 @@ app.UseStaticFiles(new StaticFileOptions
     }
 });
 
-// Gate the PAD bulk-ingestion endpoints (POST /api/imports/*) behind the API key.
-// Everything else — read-only GETs and the browser-driven manual link/assignment
-// edits (which the frontend calls without a key) — stays open, matching the
-// app's trusted-internal-network model.
+// Gate the PAD bulk-ingestion endpoints (POST /api/imports/*) and maintenance
+// operations (POST /api/maintenance/*) behind the API key. Everything else —
+// read-only GETs and the browser-driven manual link/assignment edits (which the
+// frontend calls without a key) — stays open, matching the app's
+// trusted-internal-network model.
 app.Use(async (context, next) =>
 {
-    var isImport = context.Request.Path.StartsWithSegments("/api/imports")
+    var requiresApiKey = (context.Request.Path.StartsWithSegments("/api/imports")
+            || context.Request.Path.StartsWithSegments("/api/maintenance"))
         && HttpMethods.IsPost(context.Request.Method);
 
-    if (isImport)
+    if (requiresApiKey)
     {
         var apiKey = apiKeyProvider.GetApiKey();
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -129,6 +131,7 @@ app.Use(async (context, next) =>
 });
 
 app.MapSystemEndpoints();
+app.MapMaintenanceEndpoints(databasePath);
 app.MapImportEndpoints();
 app.MapProjectEndpoints();
 app.MapManualEditEndpoints();
