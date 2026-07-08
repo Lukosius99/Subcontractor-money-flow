@@ -17,6 +17,8 @@ test-data/
 *.db-wal
 *.db-shm
 *.db-journal
+# Išimtis: naujausia atsarginė DB kopija laikoma repozitorijoje (žr. Backup-MoneyFlowDb.ps1)
+!db-backups/monthly-money-flow-latest.db*
 
 # Logs, backups, archives, and temporary output
 logs/
