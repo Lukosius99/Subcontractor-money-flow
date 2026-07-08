@@ -150,10 +150,11 @@ Importo validacija, deduplikavimas ir PAD klaidų elgsena aprašyti [docs/import
 
 ## Duomenų bazė ir atsarginės kopijos
 
-- Darbiniai `*.db`, `*-wal`, `*-shm` ir `*-journal` failai yra ignoruojami.
-- Repo neturi turėti tikrų įmonės, asmens ar SharePoint eksporto duomenų.
-- Prieš kopijuojant DB sustabdykite paslaugą arba naudokite SQLite backup mechanizmą; vien pagrindinio failo kopija aktyvaus WAL režimo metu gali būti nepilna.
-- Atsargines kopijas laikykite už repo ribų su prieiga tik administratoriui.
+- Gyva DB yra `C:\ProgramData\PADS\MoneyFlow\monthly-money-flow.db` — į repo ji nepatenka ir išgyvena atnaujinimus.
+- **`Backup-MoneyFlowDb.bat`** — trumpam sustabdo paslaugą, padaro datuotą kopiją į `C:\ProgramData\PADS\MoneyFlow\Backups` (laikoma 30 naujausių) ir naujausią kopiją įkelia į `db-backups/monthly-money-flow-latest.db` šioje repozitorijoje (senesnės versijos lieka git istorijoje).
+- **`Restore-MoneyFlowDb.bat`** — parodo rastas kopijas (lokalias ir iš `db-backups`) ir atstato pasirinktą; prieš tai dabartinė DB išsaugoma kaip `pre-restore-*` kopija.
+- Darbiniai `*.db`, `*-wal`, `*-shm` ir `*-journal` failai ignoruojami; vienintelė išimtis — `db-backups/monthly-money-flow-latest.db*`.
+- Kitų tikrų įmonės ar SharePoint eksporto duomenų į repo nedėti.
 
 Atsarginių kopijų ir atkūrimo procedūra žingsnis po žingsnio: [docs/deployment.md](docs/deployment.md).
 
