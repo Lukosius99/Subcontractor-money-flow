@@ -32,9 +32,16 @@ Dar kartą paleiskite tą pačią komandą be `-InitialDatabase`. Scenarijus sus
 
 ## Atsarginė kopija ir atkūrimas
 
+Paprasčiausias kelias — paruošti scenarijai repo šaknyje (abu patys pasiprašo administratoriaus teisių):
+
+- `Backup-MoneyFlowDb.bat` — sustabdo paslaugą, nukopijuoja DB į `C:\ProgramData\PADS\MoneyFlow\Backups` (laikoma 30 naujausių), vėl paleidžia paslaugą, patikrina `/health` ir naujausią kopiją įkelia į `db-backups/monthly-money-flow-latest.db` repozitorijoje.
+- `Restore-MoneyFlowDb.bat` — parodo rastas kopijas, prieš atstatymą dabartinę DB išsaugo kaip `pre-restore-*`, atstato pasirinktą kopiją ir patikrina `/health`.
+
+Rankinė procedūra (jei scenarijų naudoti negalima):
+
 1. Sustabdykite `MoneyFlow` paslaugą.
 2. Patikrinkite, kad nėra DB `-wal`, `-shm` ar `-journal` failų; jei yra, paslaugą trumpam paleiskite ir korektiškai sustabdykite arba naudokite SQLite backup įrankį.
-3. Nukopijuokite `C:\ProgramData\PADS\MoneyFlow\monthly-money-flow.db` į prieigos kontrole apsaugotą vietą už repo.
+3. Nukopijuokite `C:\ProgramData\PADS\MoneyFlow\monthly-money-flow.db` į prieigos kontrole apsaugotą vietą.
 4. Atkuriant sustabdykite paslaugą, atskirai išsaugokite esamą DB, pakeiskite failą ir paleiskite paslaugą.
 5. Patikrinkite `/health`, projektų sąrašą ir paskutinio importo būseną.
 
