@@ -6,6 +6,7 @@ on:
     paths-ignore:
       - "db-backups/**"
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
