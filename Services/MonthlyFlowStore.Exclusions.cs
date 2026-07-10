@@ -14,7 +14,6 @@ public sealed partial class MonthlyFlowStore
         CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        await SchemaInitializer.EnsureMasterDataTablesAsync(db, cancellationToken);
 
         var rows = await db.MonthlyFlowRows
             .AsNoTracking()
@@ -67,7 +66,6 @@ public sealed partial class MonthlyFlowStore
         try
         {
             await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-            await SchemaInitializer.EnsureMasterDataTablesAsync(db, cancellationToken);
             var scopedRow = await db.MonthlyFlowRows
                 .AsNoTracking()
                 .FirstOrDefaultAsync(candidate => candidate.Id == rowId, cancellationToken);

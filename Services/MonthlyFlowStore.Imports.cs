@@ -112,7 +112,6 @@ public sealed partial class MonthlyFlowStore
         try
         {
             await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-            await SchemaInitializer.EnsureMasterDataTablesAsync(db, cancellationToken);
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
             var result = new ContractImportResponse

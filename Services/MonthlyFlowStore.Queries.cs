@@ -26,7 +26,6 @@ public sealed partial class MonthlyFlowStore
         CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        await SchemaInitializer.EnsureMasterDataTablesAsync(db, cancellationToken);
 
         var subcontractors = await db.Subcontractors
             .AsNoTracking()
@@ -57,7 +56,6 @@ public sealed partial class MonthlyFlowStore
         CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        await SchemaInitializer.EnsureMasterDataTablesAsync(db, cancellationToken);
         var rows = await db.MonthlyFlowRows
             .AsNoTracking()
             .Where(row => !row.IsExcludedFromTotals)
@@ -90,7 +88,6 @@ public sealed partial class MonthlyFlowStore
         CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        await SchemaInitializer.EnsureMasterDataTablesAsync(db, cancellationToken);
 
         var rows = await db.MonthlyFlowRows
             .AsNoTracking()
@@ -171,7 +168,6 @@ public sealed partial class MonthlyFlowStore
     public async Task<IReadOnlyCollection<ProjectSummary>> GetProjectSummariesAsync(CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        await SchemaInitializer.EnsureMasterDataTablesAsync(db, cancellationToken);
 
         var rows = await db.MonthlyFlowRows
             .AsNoTracking()

@@ -42,6 +42,6 @@ Interaktyvi vizualizacija yra [subrangos-duomenu-kelias-3d](subrangos-duomenu-ke
 
 Sąmoningi dabartinės apimties kompromisai, kuriuos verta žinoti prieš plečiant sistemą:
 
-- **Mastelis.** Projekto detalės užklausos užkrauna visas `MonthlyFlowRows` / `SubcontractorContracts` lenteles į atmintį ir filtruoja ten, o kiekvienas skaitymas kviečia idempotentinį `SchemaInitializer`. Dabartinei skyriaus duomenų apimčiai to pakanka, bet augant eilučių skaičiui verta perkelti filtravimą į SQL ir schemos patikras palikti tik startui.
+- **Mastelis.** Projekto detalės užklausos užkrauna visas `MonthlyFlowRows` / `SubcontractorContracts` lenteles į atmintį ir filtruoja ten. Dabartinei skyriaus duomenų apimčiai to pakanka, bet augant eilučių skaičiui verta perkelti filtravimą į SQL. Schemos inicializavimas vykdomas tik proceso starto metu.
 - **`externalContractLineId` nenaudojamas rakte.** Dvi sutarčių eilutės su tuo pačiu projektu, objektu ir subrangovu suglaudinamos į vieną (antrosios suma perrašo pirmąją). Įtraukus ID į `RowKey`, esamoms DB reikėtų duomenų migracijos, todėl tai palikta sąmoningai — PAD šaltinis tokių dublikatų nesiunčia.
 - **Migracijų nėra.** Schemos pokyčiai daromi idempotentiškai per `SchemaInitializer`; žr. skyrių aukščiau.

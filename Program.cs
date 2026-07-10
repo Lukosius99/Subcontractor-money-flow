@@ -6,7 +6,95 @@ using PADS.MoneyFlow.Api.Endpoints;
 using PADS.MoneyFlow.Api.Persistence;
 using PADS.MoneyFlow.Api.Services;
 
+var cryptoOperation = args.FirstOrDefault(argument =>
+    string.Equals(argument, "--encrypt-db", StringComparison.OrdinalIgnoreCase)
+    || string.Equals(argument, "--decrypt-db", StringComparison.OrdinalIgnoreCase));
+if (cryptoOperation is not null)
+{
+    var operationIndex = Array.IndexOf(args, cryptoOperation);
+    if (operationIndex + 2 >= args.Length)
+    {
+        Console.Error.WriteLine($"Usage: PADS.MoneyFlow.Api {cryptoOperation} <input-path> <output-path>");
+        Environment.ExitCode = 2;
+        return;
+    }
+
+    var passphrase = Environment.GetEnvironmentVariable("MONEY_FLOW_BACKUP_PASSPHRASE");
+    if (string.IsNullOrWhiteSpace(passphrase))
+    {
+        Console.Error.WriteLine("MONEY_FLOW_BACKUP_PASSPHRASE is not configured.");
+        Environment.ExitCode = 2;
+        return;
+    }
+
+    try
+    {
+        if (string.Equals(cryptoOperation, "--encrypt-db", StringComparison.OrdinalIgnoreCase))
+        {
+            await BackupFileCrypto.EncryptAsync(
+                args[operationIndex + 1],
+                args[operationIndex + 2],
+                passphrase,
+                CancellationToken.None);
+        }
+        else
+        {
+            await BackupFileCrypto.DecryptAsync(
+                args[operationIndex + 1],
+                args[operationIndex + 2],
+                passphrase,
+                CancellationToken.None);
+        }
+
+        Console.WriteLine("Backup cryptographic operation passed.");
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine($"Backup cryptographic operation failed: {exception.Message}");
+        Environment.ExitCode = 1;
+    }
+
+    return;
+}
+
+// Lightweight offline DB validation used by deploy and restore scripts. It runs
+// before the web host is constructed, never mutates the supplied database and
+// communicates success/failure through the process exit code.
+var validateDatabaseIndex = Array.FindIndex(
+    args,
+    argument => string.Equals(argument, "--validate-db", StringComparison.OrdinalIgnoreCase));
+if (validateDatabaseIndex >= 0)
+{
+    if (validateDatabaseIndex + 1 >= args.Length)
+    {
+        Console.Error.WriteLine("Usage: PADS.MoneyFlow.Api --validate-db <database-path>");
+        Environment.ExitCode = 2;
+        return;
+    }
+
+    try
+    {
+        await SqliteDatabaseVerifier.VerifyIntegrityAsync(
+            args[validateDatabaseIndex + 1],
+            CancellationToken.None);
+        Console.WriteLine("Database integrity check passed.");
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine($"Database integrity check failed: {exception.Message}");
+        Environment.ExitCode = 1;
+    }
+
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
+
+if (OperatingSystem.IsWindows()
+    && Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService())
+{
+    ConfigureWindowsEventLog(builder);
+}
 
 // Allow hosting as a Windows Service. No-op when running interactively from a
 // console (e.g. `dotnet run`), so the dev workflow is unchanged. The name
@@ -139,3 +227,15 @@ app.MapManualEditEndpoints();
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+static void ConfigureWindowsEventLog(WebApplicationBuilder builder)
+{
+    if (OperatingSystem.IsWindows())
+    {
+        var settings = new Microsoft.Extensions.Logging.EventLog.EventLogSettings
+        {
+            SourceName = "MoneyFlow"
+        };
+        builder.Logging.AddEventLog(settings);
+    }
+}

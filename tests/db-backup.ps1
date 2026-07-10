@@ -3,6 +3,8 @@
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $dbPath = Join-Path $projectRoot "test-data/db-backup.db"
 $backupsDir = Join-Path $projectRoot "test-data/Backups"
+$encryptedPath = Join-Path $projectRoot "test-data/db-backup-test.mfbackup"
+$decryptedPath = Join-Path $projectRoot "test-data/db-backup-decrypted.db"
 $baseUrl = "http://localhost:5097"
 
 if (Test-Path $dbPath) {
@@ -47,6 +49,11 @@ try {
         throw "API did not start at $baseUrl"
     }
 
+    $readiness = Invoke-RestMethod -Uri "$baseUrl/ready"
+    if ($readiness.status -ne "ready") {
+        throw "Readiness endpoint did not validate the database"
+    }
+
     $import = Invoke-RestMethod -Method Post -Uri "$baseUrl/api/imports/contracts" -ContentType "application/json" `
         -Headers @{ "X-Api-Key" = $env:MONEY_FLOW_API_KEY } -Body $contractJson
     if (-not $import.imported) {
@@ -89,6 +96,20 @@ try {
         throw "Second backup reused the same file name: $($secondBackup.fileName)"
     }
 
+    # Encrypted GitHub artifact must round-trip without changing the SQLite file.
+    $tool = Join-Path $projectRoot "bin/Debug/net10.0/PADS.MoneyFlow.Api.exe"
+    if (-not (Test-Path $tool)) { throw "DB tool was not built at $tool" }
+    $env:MONEY_FLOW_BACKUP_PASSPHRASE = "integration-test-passphrase-32-chars"
+    & $tool --encrypt-db $backup.fullPath $encryptedPath
+    if ($LASTEXITCODE -ne 0) { throw "Backup encryption CLI failed" }
+    & $tool --decrypt-db $encryptedPath $decryptedPath
+    if ($LASTEXITCODE -ne 0) { throw "Backup decryption CLI failed" }
+    & $tool --validate-db $decryptedPath
+    if ($LASTEXITCODE -ne 0) { throw "Decrypted DB integrity validation failed" }
+    if ((Get-FileHash $backup.fullPath).Hash -ne (Get-FileHash $decryptedPath).Hash) {
+        throw "Encrypted backup round-trip changed the DB contents"
+    }
+
     Write-Host "db-backup.ps1 PASSED" -ForegroundColor Green
 } finally {
     if ($server -and -not $server.HasExited) {
@@ -97,6 +118,8 @@ try {
     }
     Remove-Item Env:MONEY_FLOW_DB_PATH -ErrorAction SilentlyContinue
     Remove-Item Env:MONEY_FLOW_API_KEY -ErrorAction SilentlyContinue
+    Remove-Item Env:MONEY_FLOW_BACKUP_PASSPHRASE -ErrorAction SilentlyContinue
     if (Test-Path $dbPath) { Remove-Item -LiteralPath $dbPath -Force -ErrorAction SilentlyContinue }
     if (Test-Path $backupsDir) { Remove-Item -LiteralPath $backupsDir -Recurse -Force -ErrorAction SilentlyContinue }
+    Remove-Item -LiteralPath $encryptedPath, $decryptedPath -Force -ErrorAction SilentlyContinue
 }

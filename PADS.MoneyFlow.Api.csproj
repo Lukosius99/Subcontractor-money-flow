@@ -4,11 +4,25 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>None</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
   <ItemGroup>
     <Content Remove="data\**" />
     <Content Remove="test-data\**" />
+    <Content Remove="publish\**" />
+    <Content Remove="artifacts\**" />
+    <Content Remove="db-backups\**" />
+    <Content Remove="appsettings.example.json" />
+    <Content Remove="global.json" />
     <None Remove="data\**" />
     <None Remove="test-data\**" />
+    <None Remove="publish\**" />
+    <None Remove="artifacts\**" />
+    <None Remove="db-backups\**" />
+    <None Include="appsettings.example.json" />
+    <None Remove="global.json" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.9" />
@@ -25,6 +39,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Set-MoneyFlowApiKey.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Set-MoneyFlowBackupPassphrase.ps1">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

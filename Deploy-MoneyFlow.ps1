@@ -7,21 +7,35 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 function Write-Step([string]$Message) { Write-Host "`n==> $Message" -ForegroundColor Cyan }
-function Stop-WithError([string]$Message) {
-    Write-Host "`nKLAIDA: $Message" -ForegroundColor Red
-    Write-Host "Diegimas nebaigtas. Pagalba: docs\deployment.md" -ForegroundColor Yellow
-    Read-Host 'Paspauskite Enter, kad uždarytumėte'
-    exit 1
+function Stop-WithError([string]$Message) { throw $Message }
+function Get-PlainText([Security.SecureString]$SecureValue) {
+    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureValue)
+    try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
+}
+function Add-FileRule(
+    [Security.AccessControl.DirectorySecurity]$Acl,
+    [string]$Identity,
+    [Security.AccessControl.FileSystemRights]$Rights,
+    [Security.AccessControl.InheritanceFlags]$Inheritance
+) {
+    $identityReference = if ($Identity -like 'S-1-*') {
+        New-Object Security.Principal.SecurityIdentifier($Identity)
+    } else {
+        New-Object Security.Principal.NTAccount($Identity)
+    }
+    $rule = New-Object Security.AccessControl.FileSystemAccessRule(
+        $identityReference, $Rights, $Inheritance,
+        [Security.AccessControl.PropagationFlags]::None,
+        [Security.AccessControl.AccessControlType]::Allow)
+    $Acl.AddAccessRule($rule)
 }
 
-# The script works both from a Git clone and from an extracted GitHub ZIP.
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
-    if (-not [string]::IsNullOrWhiteSpace($InitialDatabase)) {
-        $arguments += @('-InitialDatabase', "`"$InitialDatabase`"")
-    }
+    if ($InitialDatabase) { $arguments += @('-InitialDatabase', "`"$InitialDatabase`"") }
     Write-Host 'Prašoma administratoriaus teisių...' -ForegroundColor Yellow
     Start-Process powershell.exe -Verb RunAs -ArgumentList $arguments
     exit
@@ -29,161 +43,256 @@ if (-not $isAdmin) {
 
 $repoRoot = $PSScriptRoot
 $projectFile = Join-Path $repoRoot 'PADS.MoneyFlow.Api.csproj'
-$installDirectory = Join-Path $env:ProgramFiles 'PADS\MoneyFlow'
+$installParent = Join-Path $env:ProgramFiles 'PADS'
+$installDirectory = Join-Path $installParent 'MoneyFlow'
+$previousDirectory = Join-Path $installParent 'MoneyFlow.previous'
+$stagingDirectory = Join-Path $installParent ("MoneyFlow.staging.{0}" -f [guid]::NewGuid().ToString('N'))
 $executable = Join-Path $installDirectory 'PADS.MoneyFlow.Api.exe'
-$stagingDirectory = Join-Path $env:TEMP ("MoneyFlow-publish-{0}" -f [guid]::NewGuid().ToString('N'))
 $dataDirectory = Join-Path $env:ProgramData 'PADS\MoneyFlow'
 $liveDatabase = Join-Path $dataDirectory 'monthly-money-flow.db'
+$backupsDirectory = Join-Path $dataDirectory 'Backups'
 $configurationDirectory = Join-Path $dataDirectory 'Configuration'
+$passphraseFile = Join-Path $configurationDirectory 'backup-passphrase.txt'
 $serviceName = 'MoneyFlow'
+$serviceAccount = "NT SERVICE\$serviceName"
 $serviceRegistryKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName"
 $firewallRuleName = 'MoneyFlow LAN (TCP 5000)'
-
-if (-not (Test-Path -LiteralPath $projectFile)) { Stop-WithError "Nerastas projektas: $projectFile" }
-if (-not [string]::IsNullOrWhiteSpace($InitialDatabase)) {
-    if (-not (Test-Path -LiteralPath $InitialDatabase -PathType Leaf)) {
-        Stop-WithError "Nerasta nurodyta pradinė duomenų bazė: $InitialDatabase"
-    }
-    $InitialDatabase = (Resolve-Path -LiteralPath $InitialDatabase).Path
-    if ((Get-Item -LiteralPath $InitialDatabase).Length -eq 0) {
-        Stop-WithError 'Nurodyta pradinė duomenų bazė yra tuščias failas.'
-    }
-    foreach ($suffix in @('-wal', '-shm', '-journal')) {
-        if (Test-Path -LiteralPath ($InitialDatabase + $suffix)) {
-            Stop-WithError "Šalia pradinės DB yra aktyvus SQLite failas '$suffix'. Pirmiausia saugiai uždarykite DB naudojančią programą."
-        }
-    }
-}
-
-Write-Host 'MoneyFlow diegimas' -ForegroundColor Green
-Write-Host "Programa: $installDirectory"
-Write-Host "Duomenys: $liveDatabase"
-
-Write-Step '.NET 10 SDK tikrinimas'
-$dotnet = Get-Command dotnet.exe -ErrorAction SilentlyContinue
-if (-not $dotnet) {
-    Stop-WithError 'Nerastas .NET 10 SDK. Įdiekite jį iš https://dotnet.microsoft.com/download/dotnet/10.0'
-}
-$hasRequiredSdk = @(& dotnet --list-sdks) | Where-Object { $_ -match '^10\.' }
-if (-not $hasRequiredSdk) {
-    & dotnet --list-sdks
-    Stop-WithError 'Reikalingas .NET 10 SDK (vien Runtime nepakanka, nes programa publikuojama šiame kompiuteryje).'
-}
-Write-Host '[GERAI] .NET 10 SDK rastas.' -ForegroundColor Green
-
-$existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-
-if ($existingService -and $existingService.Status -ne 'Stopped') {
-    Write-Step 'Esamos paslaugos stabdymas'
-    Stop-Service -Name $serviceName
-    (Get-Service -Name $serviceName).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
-}
+$decryptedInitialDatabase = $null
+$databaseToInstall = $null
+$oldInstallMoved = $false
+$newInstallActivated = $false
+$serviceWasRunning = $false
+$existingService = $null
+$preDeployDatabase = $null
 
 try {
-    Write-Step 'Programos publikavimas'
-    & dotnet publish $projectFile -c Release -o $stagingDirectory --nologo
-    if ($LASTEXITCODE -ne 0) { throw "dotnet publish baigė darbą su kodu $LASTEXITCODE" }
-    $stagedExe = Join-Path $stagingDirectory 'PADS.MoneyFlow.Api.exe'
-    if (-not (Test-Path -LiteralPath $stagedExe)) { throw "Publikavimo aplanke nerastas $stagedExe" }
-    foreach ($requiredFile in @('appsettings.json', 'appsettings.Production.json', 'Set-MoneyFlowApiKey.ps1', 'wwwroot\index.html')) {
-        if (-not (Test-Path -LiteralPath (Join-Path $stagingDirectory $requiredFile))) {
-            throw "Publikavimo rezultate nerastas būtinas failas: $requiredFile"
+    if (-not (Test-Path -LiteralPath $projectFile)) { Stop-WithError "Nerastas projektas: $projectFile" }
+    if ($InitialDatabase) {
+        if (Test-Path -LiteralPath $liveDatabase -PathType Leaf) {
+            Write-Warning '-InitialDatabase ignoruojama, nes gyva DB jau egzistuoja.'
+            $InitialDatabase = $null
+        } elseif (-not (Test-Path -LiteralPath $InitialDatabase -PathType Leaf)) {
+            Stop-WithError "Nerasta pradinė DB kopija: $InitialDatabase"
+        } else {
+            $InitialDatabase = (Resolve-Path -LiteralPath $InitialDatabase).Path
         }
     }
 
-    New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
-    Get-ChildItem -LiteralPath $installDirectory -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
-    Copy-Item -Path (Join-Path $stagingDirectory '*') -Destination $installDirectory -Recurse -Force
-    Write-Host "[GERAI] Programa įdiegta į $installDirectory" -ForegroundColor Green
+    Write-Host 'MoneyFlow transakcinis diegimas' -ForegroundColor Green
+    Write-Host "Programa: $installDirectory"
+    Write-Host "Duomenys: $liveDatabase"
 
-    Write-Step 'Duomenų bazės paruošimas'
-    New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
-    New-Item -ItemType Directory -Path $configurationDirectory -Force | Out-Null
+    Write-Step '.NET 10 SDK tikrinimas'
+    if (-not (Get-Command dotnet.exe -ErrorAction SilentlyContinue)) {
+        Stop-WithError 'Nerastas .NET 10 SDK.'
+    }
+    if (-not (@(& dotnet --list-sdks) | Where-Object { $_ -match '^10\.' })) {
+        Stop-WithError 'Reikalingas .NET 10 SDK.'
+    }
 
-    # A normal local user may update only this configuration folder. The app
-    # reads the key file dynamically, so changing it needs no service restart.
-    $acl = New-Object Security.AccessControl.DirectorySecurity
-    $acl.SetAccessRuleProtection($true, $false)
-    $inheritance = [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
-    $propagation = [Security.AccessControl.PropagationFlags]::None
-    $allow = [Security.AccessControl.AccessControlType]::Allow
-    $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
-        (New-Object Security.Principal.SecurityIdentifier('S-1-5-18')),
-        [Security.AccessControl.FileSystemRights]::FullControl, $inheritance, $propagation, $allow)))
-    $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
-        (New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')),
-        [Security.AccessControl.FileSystemRights]::FullControl, $inheritance, $propagation, $allow)))
-    $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
-        (New-Object Security.Principal.SecurityIdentifier('S-1-5-32-545')),
-        [Security.AccessControl.FileSystemRights]::Modify, $inheritance, $propagation, $allow)))
-    Set-Acl -LiteralPath $configurationDirectory -AclObject $acl
-    Write-Host '[GERAI] Paruoštas API rakto aplankas ne administratoriaus scenarijui.' -ForegroundColor Green
-    if (Test-Path -LiteralPath $liveDatabase) {
-        Write-Host '[GERAI] Esama DB palikta nepakeista.' -ForegroundColor Green
-        if (-not [string]::IsNullOrWhiteSpace($InitialDatabase)) {
-            Write-Warning '-InitialDatabase nepanaudota, nes gyva DB jau yra. Atkurkite atsarginę kopiją tik pagal docs\deployment.md.'
+    # Publish and validation happen while the old service is still running.
+    Write-Step 'Naujos win-x64 versijos paruošimas'
+    New-Item -ItemType Directory -Path $installParent -Force | Out-Null
+    & dotnet publish $projectFile -c Release -r win-x64 --self-contained false -o $stagingDirectory --nologo
+    if ($LASTEXITCODE -ne 0) { Stop-WithError "dotnet publish baigė darbą kodu $LASTEXITCODE" }
+    $stagedExecutable = Join-Path $stagingDirectory 'PADS.MoneyFlow.Api.exe'
+    foreach ($requiredFile in @(
+        'PADS.MoneyFlow.Api.exe',
+        'appsettings.json',
+        'appsettings.Production.json',
+        'Set-MoneyFlowApiKey.ps1',
+        'Set-MoneyFlowBackupPassphrase.ps1',
+        'wwwroot\index.html')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $stagingDirectory $requiredFile))) {
+            Stop-WithError "Publish rezultate nerastas: $requiredFile"
         }
-    } elseif (-not [string]::IsNullOrWhiteSpace($InitialDatabase)) {
-        Copy-Item -LiteralPath $InitialDatabase -Destination $liveDatabase -Force
-        Write-Host '[GERAI] Pirmo diegimo DB atkurta iš nurodyto išorinio failo.' -ForegroundColor Green
-    } else {
-        Write-Host '[GERAI] Gyvos DB nėra; programa pirmo paleidimo metu sukurs tuščią DB.' -ForegroundColor Green
+    }
+
+    if ($InitialDatabase) {
+        $databaseToInstall = $InitialDatabase
+        if ([IO.Path]::GetExtension($InitialDatabase) -eq '.mfbackup') {
+            Write-Step 'Pradinės DB kopijos iššifravimas'
+            $passphrase = $env:MONEY_FLOW_BACKUP_PASSPHRASE
+            if (-not $passphrase -and (Test-Path -LiteralPath $passphraseFile -PathType Leaf)) {
+                $passphrase = (Get-Content -LiteralPath $passphraseFile -Raw).Trim()
+            }
+            if (-not $passphrase) {
+                $passphrase = Get-PlainText (Read-Host 'Įveskite backup šifravimo frazę' -AsSecureString)
+            }
+            if (-not $passphrase -or $passphrase.Length -lt 20) {
+                Stop-WithError 'Nėra tinkamos backup šifravimo frazės.'
+            }
+            $decryptedInitialDatabase = Join-Path $env:TEMP ("MoneyFlow-initial-{0}.db" -f [guid]::NewGuid().ToString('N'))
+            $previousPassphrase = $env:MONEY_FLOW_BACKUP_PASSPHRASE
+            try {
+                $env:MONEY_FLOW_BACKUP_PASSPHRASE = $passphrase
+                & $stagedExecutable --decrypt-db $InitialDatabase $decryptedInitialDatabase
+                if ($LASTEXITCODE -ne 0) { Stop-WithError 'Pradinės DB iššifravimas nepavyko.' }
+            } finally {
+                if ($null -eq $previousPassphrase) { Remove-Item Env:MONEY_FLOW_BACKUP_PASSPHRASE -ErrorAction SilentlyContinue }
+                else { $env:MONEY_FLOW_BACKUP_PASSPHRASE = $previousPassphrase }
+                $passphrase = $null
+            }
+            $databaseToInstall = $decryptedInitialDatabase
+        } else {
+            foreach ($suffix in @('-wal', '-shm', '-journal')) {
+                if (Test-Path -LiteralPath ($InitialDatabase + $suffix)) {
+                    Stop-WithError "Šalia pradinės DB yra aktyvus SQLite failas '$suffix'."
+                }
+            }
+        }
+
+        Write-Step 'Pradinės DB integrity_check'
+        & $stagedExecutable --validate-db $databaseToInstall
+        if ($LASTEXITCODE -ne 0) { Stop-WithError 'Pradinė DB nepraėjo integrity_check.' }
+    }
+
+    $existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    $serviceWasRunning = $existingService -and $existingService.Status -ne 'Stopped'
+    if ($serviceWasRunning) {
+        Write-Step 'Esamos paslaugos stabdymas'
+        Stop-Service $serviceName
+        (Get-Service $serviceName).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
+    }
+
+    if (Test-Path -LiteralPath $liveDatabase -PathType Leaf) {
+        New-Item -ItemType Directory -Path $backupsDirectory -Force | Out-Null
+        $preDeployDatabase = Join-Path $backupsDirectory ("pre-deploy-{0}.db" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+        Copy-Item -LiteralPath $liveDatabase -Destination $preDeployDatabase
+        foreach ($suffix in @('-wal', '-shm')) {
+            if (Test-Path -LiteralPath ($liveDatabase + $suffix)) {
+                Copy-Item -LiteralPath ($liveDatabase + $suffix) -Destination ($preDeployDatabase + $suffix)
+            }
+        }
+        Get-ChildItem $backupsDirectory -Filter 'pre-deploy-*.db' -File |
+            Sort-Object LastWriteTime -Descending | Select-Object -Skip 10 |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Step 'Atominis programos versijos pakeitimas'
+    Remove-Item -LiteralPath $previousDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $installDirectory) {
+        Move-Item -LiteralPath $installDirectory -Destination $previousDirectory
+        $oldInstallMoved = $true
+    }
+    Move-Item -LiteralPath $stagingDirectory -Destination $installDirectory
+    $newInstallActivated = $true
+
+    Write-Step 'Duomenų katalogų ir DB paruošimas'
+    New-Item -ItemType Directory -Path $dataDirectory, $backupsDirectory, $configurationDirectory -Force | Out-Null
+    if (-not (Test-Path -LiteralPath $liveDatabase) -and $databaseToInstall) {
+        Copy-Item -LiteralPath $databaseToInstall -Destination $liveDatabase
     }
 
     Write-Step 'Windows paslaugos konfigūravimas'
     if (-not $existingService) {
         New-Service -Name $serviceName -BinaryPathName "`"$executable`"" -DisplayName 'MoneyFlow' `
             -Description 'PADS subcontractor money-flow application' -StartupType Automatic | Out-Null
-    } else {
-        & sc.exe config $serviceName binPath= "`"$executable`"" start= auto | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Nepavyko atnaujinti Windows paslaugos.' }
     }
+    & sc.exe config $serviceName binPath= "`"$executable`"" start= auto obj= $serviceAccount | Out-Null
+    if ($LASTEXITCODE -ne 0) { Stop-WithError 'Nepavyko sukonfigūruoti serviso paskyros.' }
     New-ItemProperty -LiteralPath $serviceRegistryKey -Name Environment -PropertyType MultiString -Force -Value @(
         'ASPNETCORE_ENVIRONMENT=Production',
         'ASPNETCORE_URLS=http://0.0.0.0:5000'
     ) | Out-Null
+    if (-not [Diagnostics.EventLog]::SourceExists('MoneyFlow')) {
+        New-EventLog -LogName Application -Source 'MoneyFlow'
+    }
     & sc.exe failure $serviceName reset= 86400 actions= restart/5000/restart/15000/''/0 | Out-Null
 
-    Write-Step 'Windows užkardos taisyklės konfigūravimas'
+    Write-Step 'Mažiausių failų teisių pritaikymas'
+    $inherit = [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+    $none = [Security.AccessControl.InheritanceFlags]::None
+    $dataAcl = New-Object Security.AccessControl.DirectorySecurity
+    $dataAcl.SetAccessRuleProtection($true, $false)
+    Add-FileRule $dataAcl 'S-1-5-18' 'FullControl' $inherit
+    Add-FileRule $dataAcl 'S-1-5-32-544' 'FullControl' $inherit
+    Add-FileRule $dataAcl $serviceAccount 'Modify' $inherit
+    Add-FileRule $dataAcl 'S-1-5-32-545' 'ReadAndExecute' $none
+    Set-Acl $dataDirectory $dataAcl
+
+    $configurationAcl = New-Object Security.AccessControl.DirectorySecurity
+    $configurationAcl.SetAccessRuleProtection($true, $false)
+    Add-FileRule $configurationAcl 'S-1-5-18' 'FullControl' $inherit
+    Add-FileRule $configurationAcl 'S-1-5-32-544' 'FullControl' $inherit
+    Add-FileRule $configurationAcl $serviceAccount 'ReadAndExecute' $inherit
+    Add-FileRule $configurationAcl 'S-1-5-32-545' 'Modify' $inherit
+    Set-Acl $configurationDirectory $configurationAcl
+
+    $backupAcl = New-Object Security.AccessControl.DirectorySecurity
+    $backupAcl.SetAccessRuleProtection($true, $false)
+    Add-FileRule $backupAcl 'S-1-5-18' 'FullControl' $inherit
+    Add-FileRule $backupAcl 'S-1-5-32-544' 'FullControl' $inherit
+    Add-FileRule $backupAcl $serviceAccount 'Modify' $inherit
+    Add-FileRule $backupAcl 'S-1-5-32-545' 'ReadAndExecute' $inherit
+    Set-Acl $backupsDirectory $backupAcl
+
+    $installAcl = Get-Acl $installDirectory
+    Add-FileRule $installAcl $serviceAccount 'ReadAndExecute' $inherit
+    Set-Acl $installDirectory $installAcl
+
+    Write-Step 'Ugniasienės taisyklės konfigūravimas'
     Get-NetFirewallRule -DisplayName $firewallRuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule
     New-NetFirewallRule -DisplayName $firewallRuleName -Direction Inbound -Action Allow -Protocol TCP `
         -LocalPort 5000 -Profile Domain,Private | Out-Null
-    Write-Host '[GERAI] TCP 5000 leidžiamas Domain ir Private tinkluose.' -ForegroundColor Green
 
-    Write-Step 'Paslaugos paleidimas ir patikra'
-    Start-Service -Name $serviceName
-    (Get-Service -Name $serviceName).WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
-    $response = $null
-    for ($attempt = 1; $attempt -le 10 -and -not $response; $attempt++) {
-        try { $response = Invoke-WebRequest -Uri 'http://localhost:5000' -UseBasicParsing -TimeoutSec 5 }
-        catch { if ($attempt -lt 10) { Start-Sleep -Seconds 2 } }
+    Write-Step 'Naujos versijos paleidimas ir readiness patikra'
+    Start-Service $serviceName
+    (Get-Service $serviceName).WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
+    $ready = $false
+    for ($attempt = 1; $attempt -le 20; $attempt++) {
+        try {
+            $response = Invoke-RestMethod 'http://localhost:5000/ready' -TimeoutSec 3
+            if ($response.status -eq 'ready') { $ready = $true; break }
+        } catch { }
+        Start-Sleep -Seconds 1
     }
-    if (-not $response -or $response.StatusCode -lt 200 -or $response.StatusCode -ge 400) {
-        throw 'Paslauga paleista, bet http://localhost:5000 neatsakė sėkmingai.'
-    }
+    if (-not $ready) { Stop-WithError 'Nauja versija nepraėjo /ready patikros.' }
 
-    $computerName = $env:COMPUTERNAME
-    $lanIps = @(Get-NetIPAddress -AddressFamily IPv4 -AddressState Preferred -ErrorAction SilentlyContinue |
-        Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
-        Select-Object -ExpandProperty IPAddress -Unique)
+    Remove-Item -LiteralPath $previousDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    $oldInstallMoved = $false
     Write-Host "`nDIEGIMAS BAIGTAS SĖKMINGAI" -ForegroundColor Green
     Write-Host '  http://localhost:5000'
-    Write-Host "  http://${computerName}:5000"
-    foreach ($ip in $lanIps) { Write-Host "  http://${ip}:5000" }
-    Write-Host "`nVidinio DNS ir reverse proxy nustatymus turi atlikti tinklo administratorius (žr. docs\deployment.md)." -ForegroundColor Cyan
-    if (-not (Test-Path -LiteralPath (Join-Path $configurationDirectory 'api-key.txt'))) {
-        Write-Host "`nKITAS ŽINGSNIS: paprastas vartotojas turi paleisti Set-MoneyFlowApiKey.ps1." -ForegroundColor Yellow
+    if (-not (Test-Path (Join-Path $configurationDirectory 'api-key.txt'))) {
+        Write-Host 'KITAS ŽINGSNIS: paleiskite Set-MoneyFlowApiKey.ps1.' -ForegroundColor Yellow
+    }
+    if (-not (Test-Path $passphraseFile)) {
+        Write-Host 'KITAS ŽINGSNIS: paleiskite Set-MoneyFlowBackupPassphrase.ps1.' -ForegroundColor Yellow
+    }
+} catch {
+    $deploymentError = $_.Exception.Message
+    if ($newInstallActivated -and $oldInstallMoved -and (Test-Path $previousDirectory)) {
+        Write-Host "`nNauja versija nepavyko. Vykdomas automatinis rollback..." -ForegroundColor Yellow
+        Stop-Service $serviceName -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $installDirectory -Recurse -Force -ErrorAction SilentlyContinue
+        Move-Item -LiteralPath $previousDirectory -Destination $installDirectory
+        if ($preDeployDatabase -and (Test-Path -LiteralPath $preDeployDatabase)) {
+            foreach ($suffix in @('', '-wal', '-shm', '-journal')) {
+                Remove-Item -LiteralPath ($liveDatabase + $suffix) -Force -ErrorAction SilentlyContinue
+            }
+            Copy-Item -LiteralPath $preDeployDatabase -Destination $liveDatabase
+            foreach ($suffix in @('-wal', '-shm')) {
+                if (Test-Path -LiteralPath ($preDeployDatabase + $suffix)) {
+                    Copy-Item -LiteralPath ($preDeployDatabase + $suffix) -Destination ($liveDatabase + $suffix)
+                }
+            }
+        }
+        $oldExecutable = Join-Path $installDirectory 'PADS.MoneyFlow.Api.exe'
+        & sc.exe config $serviceName binPath= "`"$oldExecutable`"" | Out-Null
+        Start-Service $serviceName -ErrorAction SilentlyContinue
+        Write-Host '[GERAI] Ankstesnė programos versija grąžinta.' -ForegroundColor Green
+    } elseif ($serviceWasRunning -and (Get-Service $serviceName -ErrorAction SilentlyContinue).Status -eq 'Stopped') {
+        Start-Service $serviceName -ErrorAction SilentlyContinue
+    }
+    Write-Host "`nKLAIDA: $deploymentError" -ForegroundColor Red
+    Write-Host 'Diegimas nebaigtas. Žr. docs\deployment.md.' -ForegroundColor Yellow
+    if ($Host.Name -notlike '*ServerRemoteHost*') { Read-Host 'Paspauskite Enter, kad uždarytumėte' | Out-Null }
+    exit 1
+} finally {
+    Remove-Item -LiteralPath $stagingDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    if ($decryptedInitialDatabase) {
+        Remove-Item -LiteralPath $decryptedInitialDatabase -Force -ErrorAction SilentlyContinue
     }
 }
-catch {
-    Write-Host "`nKLAIDA: $($_.Exception.Message)" -ForegroundColor Red
-    Write-Host "Paslaugos būsena: $((Get-Service -Name $serviceName -ErrorAction SilentlyContinue).Status)" -ForegroundColor Yellow
-    Write-Host 'Žr. docs\deployment.md ir docs\troubleshooting.md.' -ForegroundColor Yellow
-    Read-Host 'Paspauskite Enter, kad uždarytumėte'
-    exit 1
-}
-finally {
-    Remove-Item -LiteralPath $stagingDirectory -Recurse -Force -ErrorAction SilentlyContinue
-}
 
-Read-Host 'Paspauskite Enter, kad uždarytumėte'
+Read-Host 'Paspauskite Enter, kad uždarytumėte' | Out-Null

@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "db-backups/**"
   pull_request:
 
 permissions:
@@ -31,6 +33,35 @@ jobs:
       - name: Build
         run: dotnet build PADS.MoneyFlow.Api.csproj -c Release --no-restore
 
+      - name: Verify production package
+        shell: pwsh
+        run: |
+          $output = Join-Path $env:RUNNER_TEMP 'moneyflow-publish'
+          dotnet publish PADS.MoneyFlow.Api.csproj -c Release -r win-x64 --self-contained false -o $output --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'Production publish failed' }
+          $forbidden = @(
+            'appsettings.example.json',
+            'global.json',
+            'PADS.MoneyFlow.Api.pdb',
+            'publish',
+            'db-backups',
+            'tests'
+          )
+          foreach ($name in $forbidden) {
+            if (Test-Path (Join-Path $output $name)) { throw "Forbidden publish content: $name" }
+          }
+          foreach ($required in @('PADS.MoneyFlow.Api.exe', 'Set-MoneyFlowApiKey.ps1', 'Set-MoneyFlowBackupPassphrase.ps1', 'wwwroot\index.html')) {
+            if (-not (Test-Path (Join-Path $output $required))) { throw "Missing publish content: $required" }
+          }
+
+      - name: Reject unencrypted database files
+        shell: pwsh
+        run: |
+          $rawDatabases = @(git ls-files 'db-backups/*.db' 'db-backups/*.sqlite' 'db-backups/*.sqlite3')
+          if ($rawDatabases.Count -gt 0) {
+            throw "Unencrypted database tracked in Git: $($rawDatabases -join ', ')"
+          }
+
       - name: Check vulnerable packages
         run: dotnet list PADS.MoneyFlow.Api.csproj package --vulnerable --include-transitive
 
@@ -44,12 +75,4 @@ jobs:
 
       - name: Run integration checks
         shell: pwsh
-        run: |
-          # Tests signal failure by throwing (which fails this step); they run no
-          # native commands in-process, so $LASTEXITCODE would be $null here and
-          # a `-ne 0` check would fail even after a passing test.
-          $ErrorActionPreference = "Stop"
-          Get-ChildItem tests -Filter *.ps1 | Sort-Object Name | ForEach-Object {
-            Write-Host "Running $($_.Name)"
-            & $_.FullName
-          }
+        run: .\Run-Tests.ps1

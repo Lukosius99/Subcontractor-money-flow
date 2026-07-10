@@ -15,6 +15,7 @@ Patikrinkite .NET 10, `ProgramData` teises, DB disko vietą ir `appsettings.Prod
 
 ```powershell
 Invoke-WebRequest http://localhost:5000/health
+Invoke-WebRequest http://localhost:5000/ready
 Get-NetConnectionProfile
 Get-NetFirewallRule -DisplayName "MoneyFlow LAN (TCP 5000)"
 Test-NetConnection SERVERIO-IP -Port 5000
@@ -41,6 +42,8 @@ Neloginkite ir nesiųskite viso tikro JSON į viešą issue.
 ## DB užrakinta arba sugadinta
 
 Pirmiausia sustabdykite paslaugą ir pasidarykite bitinę failų kopiją už repo. Nešalinkite `-wal` / `-shm` failų aklai. Atkūrimą atlikite iš patikrintos atsarginės kopijos ir po to paleiskite integracines patikras su nuasmeninta kopija atskiroje aplinkoje.
+
+Automatiniam atkūrimui naudokite `Restore-MoneyFlowDb.ps1`: jis prieš keitimą tikrina `integrity_check`, o po keitimo `/ready`; nesėkmės atveju grąžina ankstesnę DB.
 
 ## UI rodo seną versiją
 

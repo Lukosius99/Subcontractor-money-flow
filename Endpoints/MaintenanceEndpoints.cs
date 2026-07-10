@@ -18,6 +18,7 @@ internal static class MaintenanceEndpoints
             ILogger<Program> logger,
             CancellationToken cancellationToken) =>
         {
+            string? backupPath = null;
             try
             {
                 var backupsDirectory = Path.Combine(
@@ -26,7 +27,7 @@ internal static class MaintenanceEndpoints
                 Directory.CreateDirectory(backupsDirectory);
 
                 var baseName = $"monthly-money-flow-backup-{DateTime.Now:yyyyMMdd-HHmmss}";
-                var backupPath = Path.Combine(backupsDirectory, baseName + ".db");
+                backupPath = Path.Combine(backupsDirectory, baseName + ".db");
                 for (var attempt = 2; File.Exists(backupPath); attempt++)
                 {
                     backupPath = Path.Combine(backupsDirectory, $"{baseName}-{attempt}.db");
@@ -46,6 +47,9 @@ internal static class MaintenanceEndpoints
                     command.Parameters.Add(parameter);
                     await command.ExecuteNonQueryAsync(cancellationToken);
                 }
+
+                // Do not report or distribute a copy that cannot be restored.
+                await SqliteDatabaseVerifier.VerifyIntegrityAsync(backupPath, cancellationToken);
 
                 var prunedCount = 0;
                 var oldBackups = new DirectoryInfo(backupsDirectory)
@@ -93,6 +97,17 @@ internal static class MaintenanceEndpoints
             }
             catch (Exception exception)
             {
+                if (backupPath is not null)
+                {
+                    try
+                    {
+                        File.Delete(backupPath);
+                    }
+                    catch (Exception cleanupException) when (cleanupException is IOException or UnauthorizedAccessException)
+                    {
+                        logger.LogWarning(cleanupException, "Could not remove failed backup {BackupPath}.", backupPath);
+                    }
+                }
                 logger.LogError(exception, "Database backup failed.");
 
                 return Results.Problem(

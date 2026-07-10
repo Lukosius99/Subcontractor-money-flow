@@ -15,7 +15,7 @@ SharePoint Excel → Power Automate Cloud Flow → JSON → Power Automate Deskt
     → vietinis ASP.NET Core API → SQLite → statinė naršyklės sąsaja
 ```
 
-API ir UI yra vienas ASP.NET Core procesas: jis priima PAD importus, saugo duomenis vietiniame SQLite faile ir pateikia naršyklės sąsają. Repozitorijoje nėra darbinės ar pradinės duomenų bazės. Išsamiau: [architektūra](docs/architecture.md) ir [importo eiga](docs/import-flow.md).
+API ir UI yra vienas ASP.NET Core procesas: jis priima PAD importus, saugo duomenis vietiniame SQLite faile ir pateikia naršyklės sąsają. Repozitorijoje nėra nešifruotos darbinės DB; `db-backups/` gali būti tik šifruotas `.mfbackup` failas. Išsamiau: [architektūra](docs/architecture.md) ir [importo eiga](docs/import-flow.md).
 
 ## Technologijos
 
@@ -65,7 +65,7 @@ dotnet run
 
 ## 2. Diegimas gamybos serveryje (Windows LAN)
 
-**1 žingsnis.** Serveryje įdiekite .NET 10 SDK ir klonuokite (arba `git pull` atnaujinkite) repozitoriją.
+**1 žingsnis.** Serveryje įdiekite .NET 10 SDK ir klonuokite repozitoriją. ZIP netinka, jei backup turi būti siunčiamas į GitHub. Backup serverio Git paskyrai iš anksto nustatykite `user.name`, `user.email` ir push teisę į privatų repo.
 
 **2 žingsnis.** Administratoriaus PowerShell lange, repozitorijos kataloge, paleiskite diegimo skriptą:
 
@@ -81,23 +81,25 @@ Skriptas automatiškai:
 - sukuria ugniasienės taisyklę TCP 5000 (tik Domain ir Private profiliai);
 - pabaigoje patikrina `http://localhost:5000/health`.
 
-Jei naujam serveriui reikia pradėti nuo patikrintos išorinės DB kopijos:
+Jei naujam serveriui reikia pradėti nuo šifruotos GitHub DB kopijos:
 
 ```powershell
-.\Deploy-MoneyFlow.ps1 -InitialDatabase "D:\SecureBackups\monthly-money-flow.db"
+$env:MONEY_FLOW_BACKUP_PASSPHRASE = "<atskiru kanalu gauta frazė>"
+.\Deploy-MoneyFlow.ps1 -InitialDatabase ".\db-backups\monthly-money-flow-latest.mfbackup"
 ```
 
-**3 žingsnis.** Nustatykite PAD importo API raktą (užtenka paprasto vartotojo teisių; paslaugos perkrauti nereikia):
+**3 žingsnis.** Nustatykite PAD importo API raktą ir atskirą backup šifravimo frazę (paslaugos perkrauti nereikia):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File "C:\Program Files\PADS\MoneyFlow\Set-MoneyFlowApiKey.ps1"
+powershell -ExecutionPolicy Bypass -File "C:\Program Files\PADS\MoneyFlow\Set-MoneyFlowBackupPassphrase.ps1"
 ```
 
 Tą patį raktą Power Automate Desktop turi siųsti `X-Api-Key` antraštėje.
 
 **4 žingsnis.** Patikrinkite, kad viskas veikia:
 
-- `http://localhost:5000/health` atsako sėkmingai;
+- `http://localhost:5000/health` atsako `ok`, o `http://localhost:5000/ready` — `ready`;
 - naršyklėje atsidaro `http://<serverio-IP>:5000` projektų sąrašas;
 - po pirmo PAD importo `GET /api/imports/monthly-flow/status` rodo importo būseną.
 
@@ -146,15 +148,16 @@ PAD turi siųsti `X-Api-Key` antraštę į abu importo endpointus; ta pati antra
 | `POST` / `DELETE /api/projects/...` | Patikimos LAN UI rankiniai susiejimai ir eilučių koregavimas |
 | `GET /api/diagnostics/subcontractors` | Subrangovų normalizavimo diagnostika (tik Development) |
 | `GET /health` | Proceso gyvumo patikra; DB netikrina |
+| `GET /ready` | SQLite pasiekiamumo ir `quick_check` patikra diegimui / restore |
 
 Importo validacija, deduplikavimas ir PAD klaidų elgsena aprašyti [docs/import-flow.md](docs/import-flow.md).
 
 ## Duomenų bazė ir atsarginės kopijos
 
 - Gyva DB yra `C:\ProgramData\PADS\MoneyFlow\monthly-money-flow.db` — į repo ji nepatenka ir išgyvena atnaujinimus.
-- **`Backup-MoneyFlowDb.bat`** — veikia be administratoriaus teisių: paprašo API rakto ir per `POST /api/maintenance/db-backup` (SQLite `VACUUM INTO`) padaro vientisą datuotą kopiją į `C:\ProgramData\PADS\MoneyFlow\Backups` (laikoma 30 naujausių) nestabdant paslaugos, tada naujausią kopiją įkelia į `db-backups/monthly-money-flow-latest.db` šioje repozitorijoje (senesnės versijos lieka git istorijoje). Jei paslauga neveikia, DB failas tiesiog nukopijuojamas.
-- **`Restore-MoneyFlowDb.bat`** — parodo rastas kopijas (lokalias ir iš `db-backups`) ir atstato pasirinktą; prieš tai dabartinė DB išsaugoma kaip `pre-restore-*` kopija. Administratoriaus teisių paprašo tik tada, kai reikia sustabdyti/paleisti įdiegtą paslaugą.
-- Darbiniai `*.db`, `*-wal`, `*-shm` ir `*-journal` failai ignoruojami; vienintelė išimtis — `db-backups/monthly-money-flow-latest.db*`.
+- **`Backup-MoneyFlowDb.bat`** — per API ir SQLite `VACUUM INTO` sukuria bei patikrina vietinę kopiją, tada prieš Git commit ją AES-256-GCM formatu užšifruoja į `db-backups/monthly-money-flow-latest.mfbackup`. Git/push ar šifravimo klaida grąžina nesėkmės kodą. Jei HTTP neatsako, tiesioginė kopija leidžiama tik patvirtinus, kad servisas sustabdytas, nėra sidecar failų ir DB neužrakinta.
+- **`Restore-MoneyFlowDb.bat`** — iššifruoja pasirinktą kopiją, prieš keitimą atlieka `PRAGMA integrity_check`, po keitimo tikrina `/ready`, o nesėkmės atveju automatiškai grąžina `pre-restore-*` DB.
+- Darbiniai `*.db`, `*-wal`, `*-shm` ir `*-journal` failai ignoruojami. Git leidžiamas tik šifruotas `*.mfbackup`.
 - Kitų tikrų įmonės ar SharePoint eksporto duomenų į repo nedėti.
 
 Atsarginių kopijų ir atkūrimo procedūra žingsnis po žingsnio: [docs/deployment.md](docs/deployment.md).
@@ -166,10 +169,10 @@ dotnet format --verify-no-changes
 dotnet build -c Release
 dotnet list PADS.MoneyFlow.Api.csproj package --vulnerable --include-transitive
 Get-ChildItem wwwroot,docs -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }
-Get-ChildItem tests -Filter *.ps1 | Sort-Object Name | ForEach-Object { & $_.FullName }
+.\Run-Tests.ps1
 ```
 
-Tos pačios patikros vykdomos CI (`.github/workflows/ci.yml`). `dotnet test` šiuo metu neranda atskiro testų projekto; elgsena tikrinama PowerShell integraciniais scenarijais su izoliuotomis testinėmis DB (kiekvienas testas pats pasileidžia serverį atskirame porte ir susikuria DB `test-data/` kataloge).
+Tos pačios patikros vykdomos CI (`.github/workflows/ci.yml`). `Run-Tests.ps1` kiekvieną PowerShell integracinį scenarijų paleidžia atskirame procese, todėl aplinkos kintamieji ir numatytos HTTP antraštės tarp testų nepersiduoda.
 
 ## Trikčių šalinimas
 

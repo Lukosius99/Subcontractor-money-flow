@@ -12,7 +12,7 @@ If a credential may have leaked, rotate it first, then investigate. Removing it 
 
 ## Repository rules
 
-- Never commit API keys, tokens, passwords, SharePoint links with access tokens, `.env` files, runtime logs, JSON exports, or SQLite databases.
+- Never commit API keys, tokens, passwords, SharePoint links with access tokens, `.env` files, runtime logs, JSON exports, or unencrypted SQLite databases.
 - Use synthetic or irreversibly anonymized test fixtures only.
 - Keep this repository private and review GitHub Pages, Actions artifacts, forks, and collaborator access.
 - Run the CI build, package vulnerability check, JavaScript parse check, and all PowerShell integration tests before release.
@@ -22,5 +22,5 @@ If a credential may have leaked, rotate it first, then investigate. Removing it 
 - Restrict access with Domain/Private firewall profiles and, where possible, explicit LAN/VLAN source ranges.
 - Prefer an internal reverse proxy with host validation and HTTPS.
 - Give the service account least-privilege access to the application DB and API-key file.
-- Keep tested backups outside the repository.
+- Keep only encrypted `.mfbackup` artifacts in Git. Store the backup passphrase in the approved company password vault and transfer it separately from the repository.
 - Treat unauthenticated manual edit endpoints as trusted-LAN operations and monitor unexpected changes operationally.

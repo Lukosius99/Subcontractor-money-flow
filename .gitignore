@@ -17,8 +17,11 @@ test-data/
 *.db-wal
 *.db-shm
 *.db-journal
-# Išimtis: naujausia atsarginė DB kopija laikoma repozitorijoje (žr. Backup-MoneyFlowDb.ps1)
-!db-backups/monthly-money-flow-latest.db*
+*.mfbackup
+# Tik šifruota naujausia kopija gali būti laikoma repozitorijoje.
+!db-backups/
+!db-backups/*.mfbackup
+local-backups/
 
 # Logs, backups, archives, and temporary output
 logs/
@@ -43,6 +46,7 @@ test-data/*store*.json
 .env.*
 !.env.example
 api-key.txt
+backup-passphrase.txt
 appsettings.Development.json
 appsettings.Local.json
 appsettings.*.local.json
