@@ -26,8 +26,8 @@ Programoje nėra atskiro frontend serverio, eilės ar išorinės DB. Tai sąmoni
 
 ## Duomenų ir pasitikėjimo ribos
 
-- Naršyklės skaitymo API ir rankinio redagavimo endpointai neturi naudotojo autentifikacijos; pasitikima LAN / reverse proxy riba.
-- `POST /api/imports/*` papildomai reikalauja API rakto.
+- Skaitymo `GET/HEAD` API neturi naudotojo autentifikacijos; pasitikima LAN / reverse proxy riba.
+- Kiekviena `/api` mutacija (`POST`, `PUT`, `PATCH`, `DELETE`), įskaitant importus ir rankinį redagavimą, reikalauja bendro API rakto.
 - Užklausos kūnas ribojamas iki 10 MB.
 - Gamybos diagnostikos endpointas nepublikuojamas.
 - SQLite ir API rakto failai laikomi `ProgramData`, ne programos ar repo kataloge.

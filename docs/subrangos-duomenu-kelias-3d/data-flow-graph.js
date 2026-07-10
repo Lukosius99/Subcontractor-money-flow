@@ -95,9 +95,18 @@
     if (item) Object.assign(item, { fx: x, fy: y, fz: z });
   });
 
-  const link = (source, target, route, options = {}) => ({ source, target, route, important: options.important ?? true, curvature: options.curvature ?? 0.04 });
+  const link = (source, target, route, options = {}) => ({
+    source,
+    target,
+    route,
+    important: options.important ?? true,
+    curvature: options.curvature ?? 0.04,
+    summary: options.summary ?? false
+  });
   const links = [
     link("hub", "monthly-hub", "monthly"), link("hub", "contracts-hub", "contracts"),
+    link("monthly-hub", "sharepoint-hub", "monthly", { summary: true, curvature: 0.08 }),
+    link("contracts-hub", "sharepoint-hub", "contracts", { summary: true, curvature: -0.08 }),
     link("monthly-hub", "monthly-excel", "monthly"), link("monthly-excel", "monthly-cloud", "monthly"), link("monthly-cloud", "monthly-script", "monthly"), link("monthly-script", "monthly-json", "monthly"), link("monthly-json", "sharepoint-hub", "monthly"),
     link("contracts-hub", "dvs", "contracts"), link("dvs", "dynamics", "contracts"), link("dynamics", "sap-bo", "contracts"), link("sap-bo", "mailbox", "contracts"), link("mailbox", "contract-cloud", "contracts"), link("contract-cloud", "contract-script", "contracts"), link("contract-script", "contract-json", "contracts"), link("contract-json", "sharepoint-hub", "contracts"),
     link("sharepoint-hub", "pad-hub", "bridge"), link("pad-hub", "api-hub", "bridge"), link("api-hub", "monthly-api", "monthly"), link("api-hub", "contract-api", "contracts"), link("monthly-api", "db-hub", "monthly"), link("contract-api", "db-hub", "contracts"), link("db-hub", "ui-hub", "bridge"),
@@ -161,7 +170,7 @@
     .nodeOpacity(0.96)
     .nodeResolution(22)
     .nodeVisibility(n => nodeVisible(n))
-    .linkVisibility(l => nodeVisible(resolveNode(l.source)) && nodeVisible(resolveNode(l.target)))
+    .linkVisibility(l => linkVisible(l))
     .linkColor(l => linkColor(l))
     .linkWidth(l => linkWidth(l))
     .linkOpacity(0.82)
@@ -249,7 +258,12 @@
     return filterMatch && searchMatch;
   }
 
-  function nodeVisible(n) { return showTechnical || n.kind !== "technical"; }
+  function nodeVisible(n) { return showTechnical || n.kind === "cluster"; }
+
+  function linkVisible(l) {
+    if (l.summary && showTechnical) return false;
+    return nodeVisible(resolveNode(l.source)) && nodeVisible(resolveNode(l.target));
+  }
 
   function nodeColor(n) {
     const base = nodeBaseColor(n);
@@ -408,6 +422,7 @@
   document.addEventListener("keydown", event => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
+      document.querySelector(".search-tools").open = true;
       document.getElementById("searchInput").focus();
     }
     if (event.key === "Escape") closeDetails();
@@ -423,9 +438,11 @@
 
   document.getElementById("technicalToggle").addEventListener("change", event => {
     showTechnical = event.target.checked;
+    if (!showTechnical && selectedNode?.kind !== "cluster") closeDetails();
     refreshGraph();
   });
 
+  const simpleTour = ["monthly-hub", "contracts-hub", "sharepoint-hub", "pad-hub", "api-hub", "db-hub", "ui-hub"];
   const monthlyTour = ["monthly-excel", "monthly-cloud", "monthly-script", "monthly-json", "sharepoint-hub"];
   const contractTour = ["dvs", "dynamics", "sap-bo", "mailbox", "contract-cloud", "contract-script", "contract-json", "sharepoint-hub"];
   const sharedTour = ["pad-hub", "api-hub", "monthly-api", "contract-api", "db-hub", "ui-hub"];
@@ -433,11 +450,11 @@
     if (tourTimer) { stopTour(); return; }
     activeFilter = "all";
     document.querySelectorAll(".filter").forEach(item => item.classList.toggle("is-active", item.dataset.filter === "all"));
-    const route = [...monthlyTour, ...contractTour, ...sharedTour];
+    const route = showTechnical ? [...monthlyTour, ...contractTour, ...sharedTour] : simpleTour;
     let index = 0;
     const button = document.getElementById("tourButton");
     button.classList.add("is-running");
-    button.textContent = "Sustabdyti turą";
+    button.textContent = "Sustabdyti";
     focusNode(nodesById.get(route[index++]), true);
     tourTimer = window.setInterval(() => {
       if (index >= route.length) { stopTour(); return; }
@@ -450,7 +467,7 @@
     tourTimer = null;
     const button = document.getElementById("tourButton");
     button.classList.remove("is-running");
-    button.textContent = "Paleisti duomenų kelio turą";
+    button.textContent = "Peržiūrėti kelią";
   }
 
   window.addEventListener("resize", () => graph.width(graphElement.clientWidth).height(graphElement.clientHeight));
