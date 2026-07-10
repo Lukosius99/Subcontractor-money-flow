@@ -84,7 +84,12 @@ try {
         throw "Backup landed outside the expected Backups directory: $($backup.fullPath)"
     }
 
-    $header = [System.Text.Encoding]::ASCII.GetString((Get-Content -LiteralPath $backup.fullPath -Encoding Byte -TotalCount 15))
+    if ($PSVersionTable.PSVersion.Major -ge 6) {
+        $headerBytes = Get-Content -LiteralPath $backup.fullPath -AsByteStream -TotalCount 15
+    } else {
+        $headerBytes = Get-Content -LiteralPath $backup.fullPath -Encoding Byte -TotalCount 15
+    }
+    $header = [System.Text.Encoding]::ASCII.GetString($headerBytes)
     if ($header -ne "SQLite format 3") {
         throw "Backup file is not a valid SQLite database (header: '$header')"
     }
