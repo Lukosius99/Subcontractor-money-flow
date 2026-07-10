@@ -34,6 +34,11 @@ internal static class SystemEndpoints
             }
         });
 
+        // The API-key middleware runs before endpoints, so a successful response
+        // proves that a browser operator supplied the configured mutation key.
+        // No data is read or changed by this verification request.
+        app.MapPost("/api/access/verify", () => Results.NoContent());
+
         if (!app.Environment.IsProduction())
         {
             app.MapGet("/api/diagnostics/subcontractors", async (

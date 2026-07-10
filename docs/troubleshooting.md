@@ -45,7 +45,7 @@ Pirmiausia sustabdykite paslaugą ir pasidarykite bitinę failų kopiją už rep
 
 Automatiniam atkūrimui naudokite `Restore-MoneyFlowDb.ps1`: jis prieš keitimą tikrina `integrity_check`, o po keitimo `/ready`; nesėkmės atveju grąžina ankstesnę DB.
 
-Jei `Backup-MoneyFlowDb.ps1` šifravimo metu rodo `attempt to write a readonly database`, naudojama sena backup eiga arba pasenęs įdiegtas exe. Atnaujinta eiga nebekviečia web aplikacijos šifravimui ir kopiją kuria per `--backup-db`, todėl backup’ui nebereikia importų API rakto.
+Jei `Backup-MoneyFlowDb.ps1` šifravimo metu rodo `attempt to write a readonly database`, naudojama sena backup eiga arba pasenęs įdiegtas exe. Atnaujinta eiga nebekviečia web aplikacijos šifravimui ir kopiją kuria per `--backup-db`, todėl backup’ui nebereikia mutacijų API rakto.
 
 ## UI rodo seną versiją
 

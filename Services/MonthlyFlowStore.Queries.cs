@@ -37,16 +37,25 @@ public sealed partial class MonthlyFlowStore
             .ToListAsync(cancellationToken);
 
         return subcontractors
-            .Select(subcontractor => new SubcontractorDiagnosticRow(
-                subcontractor.NormalizedKey,
-                subcontractor.CanonicalName,
-                aliases
+            .Select(subcontractor =>
+            {
+                var matchingAliases = aliases
                     .Where(alias => alias.SubcontractorId == subcontractor.Id
                         || string.Equals(alias.NormalizedKey, subcontractor.NormalizedKey, StringComparison.Ordinal))
-                    .Select(alias => alias.RawName)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(name => name)
-                    .ToList()))
+                    .ToList();
+                return new SubcontractorDiagnosticRow(
+                    subcontractor.NormalizedKey,
+                    subcontractor.CanonicalName,
+                    matchingAliases
+                        .Select(alias => alias.RawName)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .OrderBy(name => name)
+                        .ToList(),
+                    subcontractor.LastSeenAt,
+                    matchingAliases.Count == 0
+                        ? null
+                        : matchingAliases.Max(alias => alias.LastSeenAt));
+            })
             .ToList();
     }
 

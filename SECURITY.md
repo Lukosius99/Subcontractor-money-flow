@@ -2,7 +2,7 @@
 
 ## Supported use
 
-MoneyFlow is an internal LAN application without end-user authentication. It is not designed or approved for direct internet exposure. The current maintained branch is `main`.
+MoneyFlow is an internal LAN application without end-user authentication. All internal users may use the read-only UI and GET/HEAD API endpoints. Every state-changing `/api` request (POST, PUT, PATCH, DELETE) requires the shared `X-Api-Key`. It is not designed or approved for direct internet exposure. The current maintained branch is `main`.
 
 ## Reporting
 
@@ -23,4 +23,4 @@ If a credential may have leaked, rotate it first, then investigate. Removing it 
 - Prefer an internal reverse proxy with host validation and HTTPS.
 - Give the service account least-privilege access to the application DB and API-key file.
 - Keep only encrypted `.mfbackup` artifacts in Git. Store the backup passphrase in the approved company password vault and transfer it separately from the repository.
-- Treat unauthenticated manual edit endpoints as trusted-LAN operations and monitor unexpected changes operationally.
+- Keep the mutation API key limited to PAD and approved operators. The browser keeps a manually entered key only in the current page memory and never persists it to local storage.

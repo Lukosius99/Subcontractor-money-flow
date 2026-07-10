@@ -150,6 +150,32 @@ try {
         throw "Diagnostics should expose MB 4tinklai.LT raw-name aliases under MB|4TINKLAI.LT: $($diagnostics | ConvertTo-Json -Depth 8 -Compress)"
     }
 
+    # Restarting the app must not make every identity look freshly imported.
+    # Compare both subcontractor and latest alias timestamps exposed only by the
+    # Development diagnostic endpoint.
+    $identityTimesBeforeRestart = @($diagnostics.rows | Select-Object normalizedKey, lastSeenAt, latestAliasSeenAt) |
+        ConvertTo-Json -Depth 5 -Compress
+    Stop-Process -Id $server.Id -Force
+    $server.WaitForExit()
+    $server = Start-Process -FilePath "dotnet" -ArgumentList "run --urls $baseUrl" -WorkingDirectory $projectRoot -PassThru -WindowStyle Hidden
+    $readyAfterRestart = $false
+    for ($i = 0; $i -lt 30; $i++) {
+        try {
+            Invoke-WebRequest -Uri "$baseUrl/api/projects" -UseBasicParsing | Out-Null
+            $readyAfterRestart = $true
+            break
+        } catch {
+            Start-Sleep -Milliseconds 500
+        }
+    }
+    if (-not $readyAfterRestart) { throw "API did not restart at $baseUrl" }
+    $diagnosticsAfterRestart = Invoke-RestMethod -Method Get -Uri "$baseUrl/api/diagnostics/subcontractors"
+    $identityTimesAfterRestart = @($diagnosticsAfterRestart.rows | Select-Object normalizedKey, lastSeenAt, latestAliasSeenAt) |
+        ConvertTo-Json -Depth 5 -Compress
+    if ($identityTimesAfterRestart -cne $identityTimesBeforeRestart) {
+        throw "Application restart changed subcontractor LastSeenAt diagnostics."
+    }
+
     # Re-importing the identical monthly file is a duplicate and must not double-count.
     $duplicate = Invoke-JsonPost "$baseUrl/api/imports/monthly-flow?sourceFileName=subcontractor-name-test.json" $monthlyJson
     if ($duplicate.imported -or $duplicate.reason -ne "Duplicate import") {

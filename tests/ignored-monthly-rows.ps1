@@ -49,7 +49,7 @@ try {
     if ($liveRows.Count -ne 2 -or [decimal]$before.totals.amountWithoutVat -ne 300) { throw "Initial live rows or total were incorrect." }
     $row = $liveRows | Where-Object subcontractorName -eq "Ignore Me UAB"
 
-    Invoke-RestMethod -Method Post -Uri "$baseUrl/api/projects/PIGNORE/monthly-flow/$($row.id)/exclude?objectNumber=PIGNORE-01" -ContentType "application/json" -Body '{"reason":"Duplicate source row"}' | Out-Null
+    Invoke-RestMethod -Method Post -Uri "$baseUrl/api/projects/PIGNORE/monthly-flow/$($row.id)/exclude?objectNumber=PIGNORE-01" -Headers $headers -ContentType "application/json" -Body '{"reason":"Duplicate source row"}' | Out-Null
     $excluded = Invoke-RestMethod "$baseUrl/api/projects/PIGNORE/monthly-flow?objectNumber=PIGNORE-01"
     $excludedLiveRows = @($excluded.groups | ForEach-Object rows | ForEach-Object { $_ })
     if ($excludedLiveRows.id -contains $row.id -or [decimal]$excluded.totals.amountWithoutVat -ne 200 -or $excluded.ignoredRowCount -ne 1) { throw "Ignored row remained live or still affected totals." }
@@ -69,7 +69,7 @@ try {
     $afterRestart = Invoke-RestMethod "$baseUrl/api/projects/PIGNORE/ignored-rows?objectNumber=PIGNORE-01"
     if (@($afterRestart.rows).Count -ne 1 -or [decimal]$afterRestart.rows[0].amountWithoutVat -ne 150) { throw "Ignored row did not persist in SQLite across restart." }
 
-    Invoke-RestMethod -Method Post -Uri "$baseUrl/api/projects/PIGNORE/monthly-flow/$($row.id)/restore?objectNumber=PIGNORE-01" | Out-Null
+    Invoke-RestMethod -Method Post -Uri "$baseUrl/api/projects/PIGNORE/monthly-flow/$($row.id)/restore?objectNumber=PIGNORE-01" -Headers $headers | Out-Null
     $restored = Invoke-RestMethod "$baseUrl/api/projects/PIGNORE/monthly-flow?objectNumber=PIGNORE-01"
     $restoredRows = @($restored.groups | ForEach-Object rows | ForEach-Object { $_ })
     if ($restoredRows.id -notcontains $row.id -or [decimal]$restored.totals.amountWithoutVat -ne 350 -or $restored.ignoredRowCount -ne 0) { throw "Restore did not return the row to live totals." }

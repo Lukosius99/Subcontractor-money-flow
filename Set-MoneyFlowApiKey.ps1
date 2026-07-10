@@ -11,7 +11,7 @@ try {
         throw "Nerastas $configurationDirectory. Administratorius pirmiausia turi paleisti naujausią Deploy-MoneyFlow.ps1."
     }
 
-    $secureKey = Read-Host 'Įveskite PAD / Cloud Flow API raktą (simboliai nebus rodomi)' -AsSecureString
+    $secureKey = Read-Host 'Įveskite MoneyFlow mutacijų API raktą (simboliai nebus rodomi)' -AsSecureString
     $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureKey)
     try { $apiKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
@@ -24,8 +24,8 @@ try {
     Move-Item -LiteralPath $temporaryFile -Destination $keyFile -Force
 
     Write-Host "`n[GERAI] MoneyFlow API raktas išsaugotas." -ForegroundColor Green
-    Write-Host 'Paslaugos perkrauti nereikia. Naujas raktas bus naudojamas nuo kitos importo užklausos.'
-    Write-Host 'Naudokite tą pačią reikšmę PAD / Cloud Flow X-Api-Key antraštėje.'
+    Write-Host 'Paslaugos perkrauti nereikia. Naujas raktas bus naudojamas nuo kitos duomenis keičiančios užklausos.'
+    Write-Host 'Naudokite tą pačią reikšmę PAD / Cloud Flow ir patvirtintų UI operatorių X-Api-Key antraštėje.'
 }
 catch {
     Write-Host "`nKLAIDA: $($_.Exception.Message)" -ForegroundColor Red

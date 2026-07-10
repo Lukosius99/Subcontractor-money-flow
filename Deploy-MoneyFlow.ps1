@@ -191,6 +191,10 @@ try {
     }
     & sc.exe config $serviceName binPath= "`"$executable`"" start= auto obj= $serviceAccount | Out-Null
     if ($LASTEXITCODE -ne 0) { Stop-WithError 'Nepavyko sukonfigūruoti serviso paskyros.' }
+    $configuredService = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
+    if (-not $configuredService -or $configuredService.StartName -ne $serviceAccount) {
+        Stop-WithError "Servisas nesukonfigūruotas su mažiausių teisių paskyra '$serviceAccount'."
+    }
     New-ItemProperty -LiteralPath $serviceRegistryKey -Name Environment -PropertyType MultiString -Force -Value @(
         'ASPNETCORE_ENVIRONMENT=Production',
         'ASPNETCORE_URLS=http://0.0.0.0:5000'

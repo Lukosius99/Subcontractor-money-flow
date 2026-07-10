@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     # Backwards compatibility only: backup no longer uses the HTTP API.
     [string]$ApiKey,

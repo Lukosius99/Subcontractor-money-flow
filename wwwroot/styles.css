@@ -527,8 +527,8 @@ body.drawer-open .detail-layout {
 
 .search-clear {
   display: inline-grid;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   place-items: center;
   padding: 0;
   color: var(--muted);
@@ -698,10 +698,9 @@ body.drawer-open .detail-layout {
   font-size: 12px;
   font-weight: 600;
 }
-.modal-field textarea {
+.modal-field textarea,
+.modal-field input {
   width: 100%;
-  min-height: 72px;
-  resize: vertical;
   padding: 9px 10px;
   color: var(--ink);
   background: var(--surface);
@@ -711,7 +710,10 @@ body.drawer-open .detail-layout {
   font-weight: 400;
   line-height: 1.4;
 }
-.modal-field textarea:focus { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+.modal-field textarea { min-height: 72px; resize: vertical; }
+.modal-field input { min-height: 40px; }
+.modal-field textarea:focus,
+.modal-field input:focus { outline: 2px solid var(--accent-line); outline-offset: 1px; }
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -915,10 +917,10 @@ table.contract-table thead th { overflow: visible; }
 .column-resizer {
   position: absolute;
   top: 0;
-  right: -5px;
+  right: -12px;
   bottom: 0;
   z-index: 5;
-  width: 10px;
+  width: 24px;
   cursor: col-resize;
   touch-action: none;
 }
@@ -926,7 +928,7 @@ table.contract-table thead th { overflow: visible; }
   content: "";
   position: absolute;
   top: 5px;
-  right: 4px;
+  right: 11px;
   bottom: 5px;
   width: 1px;
   background: transparent;
@@ -2857,8 +2859,8 @@ table.contract-table tbody tr.link-target:hover { background: #DCE7FB; }
 .nav-toggle {
   display: inline-grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex: none;
   margin-left: -6px;
   color: var(--muted);

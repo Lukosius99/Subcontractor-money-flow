@@ -90,7 +90,9 @@ public sealed record ConfiguredSubcontractorAlias(string? RawName, string? Canon
 public sealed record SubcontractorDiagnosticRow(
     string NormalizedKey,
     string CanonicalName,
-    IReadOnlyCollection<string> RawNames);
+    IReadOnlyCollection<string> RawNames,
+    DateTimeOffset LastSeenAt,
+    DateTimeOffset? LatestAliasSeenAt);
 
 public sealed record ProjectDetailSnapshot(
     string ProjectCode,

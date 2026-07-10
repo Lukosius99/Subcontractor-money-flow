@@ -85,6 +85,8 @@ let drawerTab = "monthly";
 let firstContractRender = true;
 let firstKpiRender = true;
 let ignoredDrawerOpen = false;
+let mutationApiKey = "";
+let excelJsLoadPromise = null;
 
 const linkBanner = document.createElement("div");
 linkBanner.className = "link-banner";
@@ -120,7 +122,10 @@ subSearchClear?.addEventListener("click", () => {
 
 toggleMonthsButton?.addEventListener("click", () => setShowMonths(!showMonths));
 
-toggleEditButton?.addEventListener("click", () => setEditMode(!editMode));
+toggleEditButton?.addEventListener("click", async () => {
+  if (!editMode && !(await ensureMutationApiKey())) return;
+  setEditMode(!editMode);
+});
 
 exportExcelButton?.addEventListener("click", exportExcel);
 ignoredRowsButton?.addEventListener("click", openIgnoredRowsDrawer);
@@ -165,7 +170,7 @@ async function assignObject(summary, rawTarget) {
     return;
   }
   try {
-    const response = await fetch(`/api/projects/${encodeURIComponent(parentProjectCodeForApi())}/object-assignments`, {
+    const response = await mutationFetch(`/api/projects/${encodeURIComponent(parentProjectCodeForApi())}/object-assignments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -174,6 +179,10 @@ async function assignObject(summary, rawTarget) {
         targetObjectNumber: target
       })
     });
+    if (!response) {
+      renderCurrentContractTable();
+      return;
+    }
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.assigned) {
       throw new Error(payload.error || `Užklausa nepavyko (${response.status}).`);
@@ -194,10 +203,11 @@ async function removeObjectAssignment(assignment) {
   });
   if (!confirmed) return;
   try {
-    const response = await fetch(
+    const response = await mutationFetch(
       `/api/projects/${encodeURIComponent(parentProjectCodeForApi())}/object-assignments/${encodeURIComponent(assignment.id)}`,
       { method: "DELETE" }
     );
+    if (!response) return;
     if (!response.ok) throw new Error(`Užklausa nepavyko (${response.status}).`);
     await loadProject();
   } catch (exception) {
@@ -231,7 +241,7 @@ function svgIcon(paths, viewBox = "0 0 24 24") {
    clear primary action. Returns a Promise<boolean> (true = confirmed). */
 let activeModalCleanup = null;
 
-function openModal({ title, subject, transfer, message, note, confirmLabel, cancelLabel = "Atšaukti", tone = "default", confirmOnly = false, reasonInput = false }) {
+function openModal({ title, subject, transfer, message, note, confirmLabel, cancelLabel = "Atšaukti", tone = "default", confirmOnly = false, reasonInput = false, passwordInput = false }) {
   return new Promise((resolve) => {
     if (activeModalCleanup) activeModalCleanup();
     const lastFocused = document.activeElement;
@@ -295,11 +305,32 @@ function openModal({ title, subject, transfer, message, note, confirmLabel, canc
       field.append(label, reasonEl);
       modal.append(field);
     }
+    let passwordEl = null;
+    if (passwordInput) {
+      const field = document.createElement("label");
+      field.className = "modal-field";
+      const label = document.createElement("span");
+      label.textContent = "API raktas";
+      passwordEl = document.createElement("input");
+      passwordEl.type = "password";
+      passwordEl.autocomplete = "off";
+      passwordEl.spellcheck = false;
+      passwordEl.maxLength = 512;
+      passwordEl.placeholder = "Įveskite X-Api-Key reikšmę";
+      field.append(label, passwordEl);
+      modal.append(field);
+    }
 
     const actions = document.createElement("div");
     actions.className = "modal-actions";
     const settle = (result) => {
-      const value = result && reasonInput ? { confirmed: true, reason: reasonEl?.value.trim() || "" } : result;
+      const value = result && (reasonInput || passwordInput)
+        ? {
+            confirmed: true,
+            reason: reasonEl?.value.trim() || "",
+            apiKey: passwordEl?.value.trim() || ""
+          }
+        : result;
       if (activeModalCleanup) activeModalCleanup();
       resolve(value);
     };
@@ -326,7 +357,7 @@ function openModal({ title, subject, transfer, message, note, confirmLabel, canc
     const onKey = (event) => {
       if (event.key === "Escape") { event.preventDefault(); settle(false); }
       else if (event.key === "Tab") {
-        const focusable = [...modal.querySelectorAll("button, textarea")];
+        const focusable = [...modal.querySelectorAll("button, textarea, input")];
         if (focusable.length === 0) return;
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
@@ -347,14 +378,59 @@ function openModal({ title, subject, transfer, message, note, confirmLabel, canc
       if (lastFocused && typeof lastFocused.focus === "function") lastFocused.focus();
     };
 
-    confirmBtn.focus();
-    requestAnimationFrame(() => confirmBtn.focus());
+    const initialFocus = passwordEl ?? reasonEl ?? confirmBtn;
+    initialFocus.focus();
+    requestAnimationFrame(() => initialFocus.focus());
   });
 }
 
 function confirmDialog(options) { return openModal(options); }
 function alertDialog(title, message) {
   return openModal({ title, message, confirmLabel: "Gerai", confirmOnly: true, tone: "danger" });
+}
+
+async function ensureMutationApiKey() {
+  if (mutationApiKey) return mutationApiKey;
+
+  const result = await openModal({
+    title: "Redagavimo prieiga",
+    message: "Duomenis keičiantiems veiksmams reikia administratoriaus suteikto API rakto.",
+    note: "Raktas laikomas tik šio puslapio atmintyje ir išvalomas puslapį uždarius arba atnaujinus.",
+    confirmLabel: "Atrakinti",
+    passwordInput: true
+  });
+  const candidate = result?.confirmed ? result.apiKey : "";
+  if (!candidate) return "";
+
+  const response = await fetch("/api/access/verify", {
+    method: "POST",
+    headers: { "X-Api-Key": candidate }
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    await alertDialog(
+      "Prieiga nesuteikta",
+      payload.error || `API raktas nepriimtas (${response.status}).`
+    );
+    return "";
+  }
+
+  mutationApiKey = candidate;
+  return mutationApiKey;
+}
+
+async function mutationFetch(input, init = {}) {
+  const apiKey = await ensureMutationApiKey();
+  if (!apiKey) return null;
+
+  const headers = new Headers(init.headers || {});
+  headers.set("X-Api-Key", apiKey);
+  const response = await fetch(input, { ...init, headers });
+  if (response.status === 401 || response.status === 503) {
+    mutationApiKey = "";
+    setEditMode(false);
+  }
+  return response;
 }
 
 const ICONS = {
@@ -766,7 +842,7 @@ async function completeLink(targetSummary) {
   cancelLinking();
   if (!confirmed) return;
   try {
-    const response = await fetch(`/api/projects/${encodeURIComponent(parentProjectCodeForApi())}/contract-links`, {
+    const response = await mutationFetch(`/api/projects/${encodeURIComponent(parentProjectCodeForApi())}/contract-links`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -775,6 +851,7 @@ async function completeLink(targetSummary) {
         targetContractRowKey: targetSummary.rowKey
       })
     });
+    if (!response) return;
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.linked) {
       throw new Error(payload.error || `Link request failed with status ${response.status}.`);
@@ -794,10 +871,11 @@ async function removeLink(link) {
   });
   if (!confirmed) return;
   try {
-    const response = await fetch(
+    const response = await mutationFetch(
       `/api/projects/${encodeURIComponent(parentProjectCodeForApi())}/contract-links/${encodeURIComponent(link.id)}`,
       { method: "DELETE" }
     );
+    if (!response) return;
     if (!response.ok) throw new Error(`Unlink request failed with status ${response.status}.`);
     await loadProject();
   } catch (exception) {
@@ -1893,7 +1971,9 @@ function exportScopeLabel() {
 }
 
 async function exportExcel() {
-  if (!window.ExcelJS) {
+  try {
+    await loadExcelJs();
+  } catch {
     await alertDialog("Eksportas nepavyko", "Nepavyko įkelti „Excel“ bibliotekos. Atnaujinkite puslapį ir bandykite dar kartą.");
     return;
   }
@@ -1929,6 +2009,28 @@ async function exportExcel() {
   a.download = `${codeLabel || "projektas"}-subrangovai-${stamp}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function loadExcelJs() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  if (excelJsLoadPromise) return excelJsLoadPromise;
+
+  excelJsLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "/vendor-exceljs.min.js?v=20260710-production-hardening";
+    script.async = true;
+    script.addEventListener("load", () => {
+      if (window.ExcelJS) resolve(window.ExcelJS);
+      else reject(new Error("ExcelJS global was not created."));
+    }, { once: true });
+    script.addEventListener("error", () => reject(new Error("ExcelJS failed to load.")), { once: true });
+    document.head.append(script);
+  }).catch((exception) => {
+    excelJsLoadPromise = null;
+    throw exception;
+  });
+
+  return excelJsLoadPromise;
 }
 
 function buildSummarySheet(wb, ctx) {
@@ -2192,16 +2294,18 @@ async function ignoreRow(row) {
   });
   if (!result?.confirmed) return;
   try {
-    const response = await fetch(scopedRowUrl(row.id, "exclude"), {
+    const response = await mutationFetch(scopedRowUrl(row.id, "exclude"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reason: result.reason })
     });
+    if (!response) return;
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `Request failed (${response.status}).`);
     await loadProject();
     showUndoToast("Eilutė neįtraukta į sumas.", async () => {
-      const undo = await fetch(scopedRowUrl(row.id, "restore"), { method: "POST" });
+      const undo = await mutationFetch(scopedRowUrl(row.id, "restore"), { method: "POST" });
+      if (!undo) return;
       if (!undo.ok) throw new Error(`Undo failed (${undo.status}).`);
       await loadProject();
     });
@@ -2220,7 +2324,8 @@ async function restoreIgnoredRow(row, { confirm = true } = {}) {
     });
     if (!accepted) return;
   }
-  const response = await fetch(scopedRowUrl(row.id, "restore"), { method: "POST" });
+  const response = await mutationFetch(scopedRowUrl(row.id, "restore"), { method: "POST" });
+  if (!response) return;
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || `Request failed (${response.status}).`);
   await loadProject();

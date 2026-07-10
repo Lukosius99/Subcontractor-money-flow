@@ -664,7 +664,8 @@ public sealed partial class MonthlyFlowStore
     private static void TouchSubcontractorAliases(
         MoneyFlowDbContext db,
         IEnumerable<string?> rawNames,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        bool updateExistingLastSeen = true)
     {
         var names = rawNames
             .Select(SubcontractorNormalizer.CleanSubcontractorDisplayName)
@@ -713,7 +714,11 @@ public sealed partial class MonthlyFlowStore
             }
             else
             {
-                subcontractor.LastSeenAt = now;
+                if (updateExistingLastSeen)
+                {
+                    subcontractor.LastSeenAt = now;
+                }
+
                 if (IsCleanerCanonicalName(identity.CanonicalDisplayName, subcontractor.CanonicalName))
                 {
                     subcontractor.CanonicalName = identity.CanonicalDisplayName;
@@ -726,7 +731,11 @@ public sealed partial class MonthlyFlowStore
                 alias.RawName = identity.RawName;
                 alias.CanonicalName = subcontractor.CanonicalName;
                 alias.SubcontractorId = subcontractor.Id;
-                alias.LastSeenAt = now;
+                if (updateExistingLastSeen)
+                {
+                    alias.LastSeenAt = now;
+                }
+
                 continue;
             }
 
@@ -811,7 +820,14 @@ public sealed partial class MonthlyFlowStore
                 .Select(row => row.SubcontractorName))
             .ToListAsync(cancellationToken);
 
-        TouchSubcontractorAliases(db, names, DateTimeOffset.UtcNow);
+        // Startup may create identities missing from an older schema, but it must
+        // not make every existing record appear newly seen. LastSeenAt represents
+        // source-import activity and is used as an alias winner tie-breaker.
+        TouchSubcontractorAliases(
+            db,
+            names,
+            DateTimeOffset.UtcNow,
+            updateExistingLastSeen: false);
         await db.SaveChangesAsync(cancellationToken);
     }
 

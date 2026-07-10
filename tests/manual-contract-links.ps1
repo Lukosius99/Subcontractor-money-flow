@@ -201,7 +201,8 @@ try {
     }
 
     # Removing the link restores the unmatched row but keeps the direct match.
-    $delete = Invoke-WebRequest -Method Delete -Uri "$baseUrl/api/projects/P1578/contract-links/$($link.id)" -UseBasicParsing
+    $delete = Invoke-WebRequest -Method Delete -Uri "$baseUrl/api/projects/P1578/contract-links/$($link.id)" `
+        -Headers @{ "X-Api-Key" = $env:MONEY_FLOW_API_KEY } -UseBasicParsing
     if ($delete.StatusCode -ne 204) {
         throw "Link delete should return 204, got $($delete.StatusCode)."
     }
@@ -222,7 +223,8 @@ try {
     # Deleting an unknown link id returns 404.
     $notFound = $false
     try {
-        Invoke-WebRequest -Method Delete -Uri "$baseUrl/api/projects/P1578/contract-links/00000000-0000-0000-0000-000000000000" -UseBasicParsing | Out-Null
+        Invoke-WebRequest -Method Delete -Uri "$baseUrl/api/projects/P1578/contract-links/00000000-0000-0000-0000-000000000000" `
+            -Headers @{ "X-Api-Key" = $env:MONEY_FLOW_API_KEY } -UseBasicParsing | Out-Null
     } catch {
         $notFound = $true
     }

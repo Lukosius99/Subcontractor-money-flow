@@ -15,7 +15,7 @@ SharePoint Excel → Power Automate Cloud Flow → JSON → Power Automate Deskt
     → vietinis ASP.NET Core API → SQLite → statinė naršyklės sąsaja
 ```
 
-API ir UI yra vienas ASP.NET Core procesas: jis priima PAD importus, saugo duomenis vietiniame SQLite faile ir pateikia naršyklės sąsają. Repozitorijoje nėra nešifruotos darbinės DB; `db-backups/` gali būti tik šifruotas `.mfbackup` failas. Išsamiau: [architektūra](docs/architecture.md) ir [importo eiga](docs/import-flow.md).
+API ir UI yra vienas ASP.NET Core procesas: jis priima PAD importus, saugo duomenis vietiniame SQLite faile ir pateikia naršyklės sąsają. Dabartinėje repozitorijos būsenoje nėra nešifruotos darbinės DB; `db-backups/` gali būti tik šifruotas `.mfbackup` failas. Jei nešifruota DB kada nors buvo commitinta, vien jos ištrynimo neužtenka — prieš suteikiant naują repo prieigą reikia koordinuotai išvalyti visą Git istoriją. Išsamiau: [architektūra](docs/architecture.md) ir [importo eiga](docs/import-flow.md).
 
 ## Technologijos
 
@@ -45,7 +45,7 @@ git clone https://github.com/Lukosius99/Subcontractor-money-flow.git
 cd Subcontractor-money-flow
 ```
 
-**2 žingsnis.** (Nebūtina) Nustatykite importo API raktą. Jis reikalingas `POST /api/imports/*` užklausoms ir pagalbiniam HTTP maintenance endpoint’ui — be jo programa pasileidžia ir UI veikia, tik importai / HTTP maintenance grąžina 503. Įprastas `Backup-MoneyFlowDb.bat` API rakto nenaudoja:
+**2 žingsnis.** (Nebūtina tik skaitymui) Nustatykite API raktą. Be jo programa pasileidžia, UI ir visi skaitymo `GET/HEAD` endpointai veikia, tačiau kiekviena duomenis keičianti `/api` užklausa (`POST`, `PUT`, `PATCH`, `DELETE`) grąžina 503. Su neteisingu arba trūkstamu užklausos `X-Api-Key` grąžinamas 401. Įprastas `Backup-MoneyFlowDb.bat` API rakto nenaudoja:
 
 ```powershell
 $env:MONEY_FLOW_API_KEY = "dev-only-key-at-least-16-chars"
@@ -88,7 +88,9 @@ $env:MONEY_FLOW_BACKUP_PASSPHRASE = "<atskiru kanalu gauta frazė>"
 .\Deploy-MoneyFlow.ps1 -InitialDatabase ".\db-backups\monthly-money-flow-latest.mfbackup"
 ```
 
-**3 žingsnis.** Nustatykite PAD importo API raktą ir atskirą backup šifravimo frazę (paslaugos perkrauti nereikia):
+Prieš migraciją senajame serveryje dar kartą paleiskite `Backup-MoneyFlowDb.bat`, įsitikinkite, kad naujas šifruotas commit pasiekė privatų repo, ir tik tada klonuokite naujame serveryje.
+
+**3 žingsnis.** Nustatykite bendrą mutacijų API raktą (PAD importams ir patvirtintiems UI redagavimo operatoriams) bei atskirą backup šifravimo frazę; paslaugos perkrauti nereikia:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File "C:\Program Files\PADS\MoneyFlow\Set-MoneyFlowApiKey.ps1"
@@ -123,18 +125,18 @@ Saugus struktūros pavyzdys yra [appsettings.example.json](appsettings.example.j
 | Nustatymas | Paskirtis |
 |---|---|
 | `MoneyFlow:DatabasePath` / `MONEY_FLOW_DB_PATH` | SQLite failo kelias |
-| `MoneyFlow:ApiKeyFilePath` | PAD importo API rakto failas (gamybos būdas) |
+| `MoneyFlow:ApiKeyFilePath` | Mutacijų API rakto failas (gamybos būdas) |
 | `MoneyFlow:ApiKey` | Raktas tiesiogiai konfigūracijoje (nerekomenduojama gamyboje) |
 | `MONEY_FLOW_API_KEY` | Rakto aplinkos kintamasis — patogiausias lokaliai plėtrai |
 | `Kestrel:Endpoints:Http:Url` / `ASPNETCORE_URLS` | Klausomas HTTP adresas |
 
-API rakto šaltinių prioritetas: failas (`ApiKeyFilePath`) → `MoneyFlow:ApiKey` → `MONEY_FLOW_API_KEY`.
+DB kelio prioritetas: `MONEY_FLOW_DB_PATH` → įprasta ASP.NET Core `MoneyFlow:DatabasePath` konfigūracija (įskaitant `MoneyFlow__DatabasePath`) → programos `data/` katalogas. API rakto šaltinių prioritetas: failas (`ApiKeyFilePath`) → `MoneyFlow:ApiKey` → `MONEY_FLOW_API_KEY`.
 
 Gamyboje diegimo scenarijus naudoja `C:\ProgramData\PADS\MoneyFlow` duomenims ir `C:\Program Files\PADS\MoneyFlow` programai.
 
 ## Importai ir pagrindiniai endpointai
 
-PAD turi siųsti `X-Api-Key` antraštę į abu importo endpointus; `POST /api/maintenance/*` taip pat lieka apsaugotas API raktu, bet įprastas `Backup-MoneyFlowDb.bat` jo nebenaudoja. Užklausos kūnas ribojamas iki 10 MB.
+Visi skaitymo `GET/HEAD` endpointai yra atviri vidinio tinklo naudotojams. Kiekviena `/api` mutacija (`POST`, `PUT`, `PATCH`, `DELETE`) turi siųsti `X-Api-Key`, įskaitant PAD importus, maintenance ir rankines UI korekcijas. Projekto detalės puslapis rakto paprašo tik pradedant redagavimą; jis laikomas tik atidaryto puslapio atmintyje. Įprastas `Backup-MoneyFlowDb.bat` rakto nenaudoja. Užklausos kūnas ribojamas iki 10 MB.
 
 | Metodas ir kelias | Paskirtis |
 |---|---|
@@ -145,7 +147,7 @@ PAD turi siųsti `X-Api-Key` antraštę į abu importo endpointus; `POST /api/ma
 | `GET /api/projects` | Projektų sąrašas |
 | `GET /api/projects/{code}/monthly-flow` | Projekto / objekto detalė |
 | `GET /api/projects/{code}/ignored-rows` | Rankiniu būdu ignoruotos eilutės |
-| `POST` / `DELETE /api/projects/...` | Patikimos LAN UI rankiniai susiejimai ir eilučių koregavimas |
+| `POST` / `DELETE /api/projects/...` | Rankiniai susiejimai ir eilučių koregavimas; visada reikia API rakto |
 | `GET /api/diagnostics/subcontractors` | Subrangovų normalizavimo diagnostika (tik Development) |
 | `GET /health` | Proceso gyvumo patikra; DB netikrina |
 | `GET /ready` | SQLite pasiekiamumo ir `quick_check` patikra diegimui / restore |
@@ -180,7 +182,11 @@ Trumpi sprendimai pateikti [docs/troubleshooting.md](docs/troubleshooting.md). D
 
 ## Saugumas ir projekto būsena
 
-Tai vidinė, autentifikacijos neturinti LAN programa. Jos negalima jungti tiesiai prie interneto. Skaitymo endpointai ir dalis UI rašymo veiksmų pasitiki tinklo riba; importus papildomai saugo API raktas. Taikykite ugniasienės / VLAN ribojimus, reverse proxy, mažiausias failų teises ir atsargines kopijas. Žr. [SECURITY.md](SECURITY.md).
+Tai vidinė, naudotojų autentifikacijos neturinti LAN programa. Jos negalima jungti tiesiai prie interneto. Visi vidinio tinklo naudotojai gali skaityti duomenis, o visus rašymo veiksmus saugo bendras API raktas. Diegimo ugniasienė pagal nutylėjimą priima visus Domain/Private profilio klientus; jei „vidinis tinklas“ turi būti siauresnis, apribokite `RemoteAddress` iki įmonės VLAN / potinklių. Žr. [SECURITY.md](SECURITY.md).
+
+## Darbo kopijos higiena
+
+`bin/`, `obj/`, `publish/`, `artifacts/` ir `test-data/` yra generuojami arba lokalūs katalogai ir į Git nepatenka. Jų nereikia kopijuoti į naują serverį — production diegimas turi prasidėti nuo švaraus `git clone`. `local-backups/` gali turėti nešifruotą DB, todėl jį laikykite jautriu lokaliu aplanku ir niekada nekelkite į repo ar bendrą ZIP.
 
 Projektas yra vidinis ir aktyviai prižiūrimas pagal skyriaus poreikius. Už priežiūrą atsako vidinis projekto maintaineris; incidentus ir prieigos klausimus perduokite įmonės patvirtintu kanalu.
 

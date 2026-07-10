@@ -149,14 +149,14 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 // Resolve the SQLite database path. Order of precedence:
-//   1. MoneyFlow:DatabasePath in appsettings (.Production.json overrides base).
-//   2. MONEY_FLOW_DB_PATH environment variable.
+//   1. MONEY_FLOW_DB_PATH environment variable (explicit operational override).
+//   2. MoneyFlow:DatabasePath from the normal ASP.NET Core configuration chain.
 //   3. <app base directory>/data/monthly-money-flow.db
 // Using AppContext.BaseDirectory (not Directory.GetCurrentDirectory) so that
 // running under a Windows Service does not accidentally place the DB in
 // C:\Windows\System32 when WorkingDirectory is not set.
-var databasePath = builder.Configuration["MoneyFlow:DatabasePath"]
-    ?? Environment.GetEnvironmentVariable("MONEY_FLOW_DB_PATH")
+var databasePath = Environment.GetEnvironmentVariable("MONEY_FLOW_DB_PATH")
+    ?? builder.Configuration["MoneyFlow:DatabasePath"]
     ?? Path.Combine(AppContext.BaseDirectory, "data", "monthly-money-flow.db");
 var databaseDirectory = Path.GetDirectoryName(databasePath);
 if (!string.IsNullOrWhiteSpace(databaseDirectory))
@@ -176,7 +176,7 @@ var apiKeyProvider = app.Services.GetRequiredService<ApiKeyProvider>();
 if (string.IsNullOrWhiteSpace(apiKeyProvider.GetApiKey()))
 {
     app.Logger.LogWarning(
-        "MoneyFlow API key is not configured. Import endpoints will reject requests until " +
+        "MoneyFlow API key is not configured. State-changing API endpoints will reject requests until " +
         "Set-MoneyFlowApiKey.ps1 is run.");
 }
 
@@ -212,16 +212,17 @@ app.UseStaticFiles(new StaticFileOptions
     }
 });
 
-// Gate the PAD bulk-ingestion endpoints (POST /api/imports/*) and maintenance
-// operations (POST /api/maintenance/*) behind the API key. Everything else —
-// read-only GETs and the browser-driven manual link/assignment edits (which the
-// frontend calls without a key) — stays open, matching the app's
-// trusted-internal-network model.
+// Everyone on the trusted internal network may use the read-only UI and GET/HEAD
+// API endpoints without signing in. Every state-changing API request is gated by
+// the API key, including browser-driven corrections. This default-deny rule also
+// protects future POST/PUT/PATCH/DELETE endpoints automatically.
 app.Use(async (context, next) =>
 {
-    var requiresApiKey = (context.Request.Path.StartsWithSegments("/api/imports")
-            || context.Request.Path.StartsWithSegments("/api/maintenance"))
-        && HttpMethods.IsPost(context.Request.Method);
+    var isReadOnlyMethod = HttpMethods.IsGet(context.Request.Method)
+        || HttpMethods.IsHead(context.Request.Method)
+        || HttpMethods.IsOptions(context.Request.Method);
+    var requiresApiKey = context.Request.Path.StartsWithSegments("/api")
+        && !isReadOnlyMethod;
 
     if (requiresApiKey)
     {
@@ -229,7 +230,7 @@ app.Use(async (context, next) =>
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-            await context.Response.WriteAsJsonAsync(new { error = "Import API key is not configured." });
+            await context.Response.WriteAsJsonAsync(new { error = "Mutation API key is not configured." });
             return;
         }
 
@@ -255,6 +256,10 @@ app.MapMaintenanceEndpoints(databasePath);
 app.MapImportEndpoints();
 app.MapProjectEndpoints();
 app.MapManualEditEndpoints();
+
+// API callers must receive a real JSON 404. Without this catch-all, the SPA
+// fallback returns index.html with HTTP 200 for mistyped /api routes.
+app.Map("/api/{**path}", () => Results.NotFound(new { error = "API endpoint not found." }));
 
 app.MapFallbackToFile("index.html");
 
