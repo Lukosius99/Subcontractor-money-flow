@@ -24,3 +24,4 @@ If a credential may have leaked, rotate it first, then investigate. Removing it 
 - Give the service account least-privilege access to the application DB and API-key file.
 - Keep only encrypted `.mfbackup` artifacts in Git. Store the backup passphrase in the approved company password vault and transfer it separately from the repository.
 - Keep the mutation API key limited to PAD and approved operators. The browser keeps a manually entered key only in the current page memory and never persists it to local storage.
+- Treat the shared API key as restore authority: `POST /api/maintenance/db-restore` can replace all application data. The endpoint accepts only a validated `.mfbackup` or standalone `.db`, creates a rollback copy, and is unavailable without the key.

@@ -115,6 +115,58 @@ internal static class SqliteDatabaseVerifier
         }
     }
 
+    public static async Task RestoreConsistentBackupAsync(
+        string sourceDatabasePath,
+        string destinationDatabasePath,
+        CancellationToken cancellationToken)
+    {
+        var sourceFullPath = Path.GetFullPath(sourceDatabasePath);
+        var destinationFullPath = Path.GetFullPath(destinationDatabasePath);
+        if (string.Equals(sourceFullPath, destinationFullPath, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                "Restore source and destination paths must be different.",
+                nameof(destinationDatabasePath));
+        }
+
+        await VerifyIntegrityAsync(sourceFullPath, cancellationToken);
+
+        var destinationFile = new FileInfo(destinationFullPath);
+        if (!destinationFile.Exists || destinationFile.Length == 0)
+        {
+            throw new InvalidDataException(
+                $"SQLite destination database does not exist or is empty: {destinationFullPath}");
+        }
+
+        var sourceConnectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = sourceFullPath,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false
+        }.ToString();
+        var destinationConnectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = destinationFullPath,
+            Mode = SqliteOpenMode.ReadWrite,
+            Pooling = false,
+            DefaultTimeout = 30
+        }.ToString();
+
+        // The maintenance gate has already drained API requests. Clearing idle
+        // pools releases remaining SQLite handles without restarting the service.
+        SqliteConnection.ClearAllPools();
+        {
+            await using var sourceConnection = new SqliteConnection(sourceConnectionString);
+            await using var destinationConnection = new SqliteConnection(destinationConnectionString);
+            await sourceConnection.OpenAsync(cancellationToken);
+            await destinationConnection.OpenAsync(cancellationToken);
+            sourceConnection.BackupDatabase(destinationConnection);
+        }
+
+        SqliteConnection.ClearAllPools();
+        await VerifyIntegrityAsync(destinationFullPath, cancellationToken);
+    }
+
     public static async Task VerifyReadinessAsync(
         IDbContextFactory<MoneyFlowDbContext> dbFactory,
         CancellationToken cancellationToken)

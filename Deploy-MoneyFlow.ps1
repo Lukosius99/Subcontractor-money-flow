@@ -101,7 +101,9 @@ try {
         'appsettings.json',
         'appsettings.Production.json',
         'Set-MoneyFlowApiKey.ps1',
+        'Set-MoneyFlowApiKey.bat',
         'Set-MoneyFlowBackupPassphrase.ps1',
+        'Set-MoneyFlowBackupPassphrase.bat',
         'wwwroot\index.html')) {
         if (-not (Test-Path -LiteralPath (Join-Path $stagingDirectory $requiredFile))) {
             Stop-WithError "Publish rezultate nerastas: $requiredFile"
@@ -258,10 +260,10 @@ try {
     Write-Host "`nDIEGIMAS BAIGTAS SĖKMINGAI" -ForegroundColor Green
     Write-Host '  http://localhost:5000'
     if (-not (Test-Path (Join-Path $configurationDirectory 'api-key.txt'))) {
-        Write-Host 'KITAS ŽINGSNIS: paleiskite Set-MoneyFlowApiKey.ps1.' -ForegroundColor Yellow
+        Write-Host 'KITAS ŽINGSNIS: paleiskite Set-MoneyFlowApiKey.bat.' -ForegroundColor Yellow
     }
     if (-not (Test-Path $passphraseFile)) {
-        Write-Host 'KITAS ŽINGSNIS: paleiskite Set-MoneyFlowBackupPassphrase.ps1.' -ForegroundColor Yellow
+        Write-Host 'KITAS ŽINGSNIS: paleiskite Set-MoneyFlowBackupPassphrase.bat.' -ForegroundColor Yellow
     }
 } catch {
     $deploymentError = $_.Exception.Message

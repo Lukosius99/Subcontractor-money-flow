@@ -19,6 +19,7 @@ Saugus struktūros pavyzdys yra [appsettings.example.json](../appsettings.exampl
 |---|---|
 | `MoneyFlow:DatabasePath` / `MONEY_FLOW_DB_PATH` | SQLite failo kelias |
 | `MoneyFlow:ApiKeyFilePath` | Production API rakto failas |
+| `MoneyFlow:BackupPassphraseFilePath` | Production backup šifravimo frazės failas |
 | `MoneyFlow:ApiKey` | Raktas konfigūracijoje, production nerekomenduojama |
 | `MONEY_FLOW_API_KEY` | API raktas lokaliai plėtrai |
 | `Kestrel:Endpoints:Http:Url` / `ASPNETCORE_URLS` | Klausomas HTTP adresas |
@@ -54,6 +55,7 @@ ApiKeyFilePath → MoneyFlow:ApiKey → MONEY_FLOW_API_KEY
 | `GET /api/projects/{code}/monthly-flow` | Projekto detalė |
 | `GET /api/projects/{code}/ignored-rows` | Ignoruotos eilutės |
 | `POST /api/maintenance/db-backup` | Vientisa pagalbinė SQLite kopija |
+| `POST /api/maintenance/db-restore` | Online DB atkūrimas su rollback, serviso nestabdant |
 | `GET /health` | Proceso gyvumas |
 | `GET /ready` | DB pasiekiamumas ir `quick_check` |
 

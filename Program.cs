@@ -169,6 +169,8 @@ builder.Services.AddDbContextFactory<MoneyFlowDbContext>(options =>
 builder.Services.AddSingleton<MonthlyFlowStore>();
 builder.Services.AddSingleton<MonthlyFlowImportService>();
 builder.Services.AddSingleton<ApiKeyProvider>();
+builder.Services.AddSingleton<BackupPassphraseProvider>();
+builder.Services.AddSingleton<DatabaseMaintenanceGate>();
 
 var app = builder.Build();
 
@@ -246,6 +248,34 @@ app.Use(async (context, next) =>
             await context.Response.WriteAsJsonAsync(new { error = "Missing or invalid API key." });
             return;
         }
+    }
+
+    await next();
+});
+
+var databaseMaintenanceGate = app.Services.GetRequiredService<DatabaseMaintenanceGate>();
+app.Use(async (context, next) =>
+{
+    var isRestoreRequest = string.Equals(
+        context.Request.Path.Value,
+        "/api/maintenance/db-restore",
+        StringComparison.OrdinalIgnoreCase);
+    var usesDatabase = context.Request.Path.StartsWithSegments("/api")
+        || context.Request.Path.Equals("/ready");
+
+    if (!usesDatabase || isRestoreRequest)
+    {
+        await next();
+        return;
+    }
+
+    using var requestLease = databaseMaintenanceGate.TryEnterRequest();
+    if (requestLease is null)
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        context.Response.Headers.RetryAfter = "1";
+        await context.Response.WriteAsJsonAsync(new { error = "Database maintenance is in progress." });
+        return;
     }
 
     await next();

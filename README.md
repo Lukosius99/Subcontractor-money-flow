@@ -18,11 +18,7 @@
 
 ### 1. Paruoškite naujausią DB kopiją
 
-Sename serveryje paleiskite:
-
-```powershell
-.\Backup-MoneyFlowDb.bat
-```
+Sename serveryje dukart spustelėkite **`Backup-MoneyFlowDb.bat`**.
 
 Sėkmingai pasibaigusi komanda užšifruotą kopiją įkelia į privatų GitHub repo. Šifravimo frazę perduokite atskiru saugiu kanalu.
 
@@ -37,21 +33,16 @@ cd Subcontractor-money-flow
 
 ### 3. Įdiekite programą
 
-Atidarykite **PowerShell kaip administratorius**:
+Repo kataloge dukart spustelėkite **`Deploy-MoneyFlow.bat`**. Patvirtinkite Windows administratoriaus užklausą ir, jei prašoma, įveskite backup šifravimo frazę.
 
-```powershell
-$env:MONEY_FLOW_BACKUP_PASSPHRASE = "<atskiru kanalu gauta frazė>"
-.\Deploy-MoneyFlow.ps1 -InitialDatabase ".\db-backups\monthly-money-flow-latest.mfbackup"
-```
-
-Diegimo scenarijus pats publikuoja programą, sukuria Windows servisą, paruošia ugniasienę ir patikrina `/health` bei `/ready`.
+Paleidiklis pats parenka naujausią GitHub DB kopiją. Diegimo scenarijus publikuoja programą, sukuria Windows servisą, paruošia ugniasienę ir patikrina `/health` bei `/ready`.
 
 ### 4. Nustatykite raktus
 
-```powershell
-& "C:\Program Files\PADS\MoneyFlow\Set-MoneyFlowApiKey.ps1"
-& "C:\Program Files\PADS\MoneyFlow\Set-MoneyFlowBackupPassphrase.ps1"
-```
+Atidarykite `C:\Program Files\PADS\MoneyFlow` ir paleiskite:
+
+1. **`Set-MoneyFlowApiKey.bat`**
+2. **`Set-MoneyFlowBackupPassphrase.bat`**
 
 Tą patį API raktą Power Automate Desktop turi siųsti `X-Api-Key` antraštėje.
 
@@ -64,12 +55,21 @@ Tą patį API raktą Power Automate Desktop turi siųsti `X-Api-Key` antraštėj
 
 ## Atnaujinimas
 
-```powershell
-git pull
-powershell -ExecutionPolicy Bypass -File .\Deploy-MoneyFlow.ps1
-```
+Atnaujinkite repo (`git pull` arba GitHub Desktop), tada vėl dukart spustelėkite **`Deploy-MoneyFlow.bat`**.
 
 Gyva DB saugoma `C:\ProgramData\PADS\MoneyFlow` ir atnaujinant neperrašoma. Nesėkmingo diegimo atveju scenarijus grąžina ankstesnę programos ir DB būseną.
+
+## Kurį failą paleisti
+
+| Veiksmas | Paleidžiamas failas | Administratoriaus teisės |
+|---|---|---|
+| Įdiegti arba atnaujinti | `Deploy-MoneyFlow.bat` | Taip, Windows paprašys automatiškai |
+| Sukurti ir įkelti DB kopiją | `Backup-MoneyFlowDb.bat` | Ne |
+| Atkurti DB | `Restore-MoneyFlowDb.bat` | Ne |
+| Pakeisti API raktą | `Set-MoneyFlowApiKey.bat` | Ne |
+| Pakeisti backup frazę | `Set-MoneyFlowBackupPassphrase.bat` | Ne |
+
+Atkuriant DB servisas nestabdomas. Jis pats patikrina kopiją, sukuria rollback failą ir pakeičia SQLite turinį; kelioms sekundėms naujos DB užklausos gali gauti `503`.
 
 ## Prieigos modelis
 

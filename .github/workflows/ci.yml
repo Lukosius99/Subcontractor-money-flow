@@ -51,7 +51,14 @@ jobs:
           foreach ($name in $forbidden) {
             if (Test-Path (Join-Path $output $name)) { throw "Forbidden publish content: $name" }
           }
-          foreach ($required in @('PADS.MoneyFlow.Api.exe', 'Set-MoneyFlowApiKey.ps1', 'Set-MoneyFlowBackupPassphrase.ps1', 'wwwroot\index.html')) {
+          foreach ($required in @(
+            'PADS.MoneyFlow.Api.exe',
+            'Set-MoneyFlowApiKey.ps1',
+            'Set-MoneyFlowApiKey.bat',
+            'Set-MoneyFlowBackupPassphrase.ps1',
+            'Set-MoneyFlowBackupPassphrase.bat',
+            'wwwroot\index.html'
+          )) {
             if (-not (Test-Path (Join-Path $output $required))) { throw "Missing publish content: $required" }
           }
 

@@ -9,33 +9,17 @@ Programa skirta vienam kontroliuojamam Windows LAN serveriui. Numatytasis adresa
 1. Įdiekite .NET 10 SDK.
 2. Klonuokite privatų repo. ZIP netinka, jei backup turi būti siunčiamas į GitHub, nes neturi `.git` metaduomenų.
 3. Backup serverio Git paskyrai nustatykite `user.name`, `user.email` ir autentifikaciją su push teise į privatų repo. Prieš suteikdami naujam serveriui repo prieigą patvirtinkite, kad Git istorijoje nebėra senų nešifruotų DB objektų.
-4. Administratoriaus PowerShell lange vykdykite:
-
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\Deploy-MoneyFlow.ps1
-   ```
+4. Dukart spustelėkite `Deploy-MoneyFlow.bat`. Paleidiklis pats paprašys administratoriaus teisių ir, jei tai pirmas diegimas, parinks `db-backups\monthly-money-flow-latest.mfbackup`.
 
 5. Scenarijus paruošia ir patikrina `win-x64` paketą dar veikiant senai versijai, tada trumpam pakeičia programos katalogą. Nauja versija laikoma sėkminga tik kai `/ready` patvirtina DB; kitu atveju automatiškai grąžinamas ankstesnis katalogas. Servisas turi veikti kaip `NT SERVICE\MoneyFlow`, ne `LocalSystem`.
 6. Servisas veikia kaip virtuali `NT SERVICE\MoneyFlow` paskyra, turinti keitimo teises tik `ProgramData` duomenims ir skaitymo / vykdymo teises programai.
-7. Vietinis operatorius paleidžia abu konfigūravimo scenarijus:
+7. Vietinis operatorius iš `C:\Program Files\PADS\MoneyFlow` paleidžia `Set-MoneyFlowApiKey.bat`, tada `Set-MoneyFlowBackupPassphrase.bat`.
 
-   ```powershell
-   & 'C:\Program Files\PADS\MoneyFlow\Set-MoneyFlowApiKey.ps1'
-   & 'C:\Program Files\PADS\MoneyFlow\Set-MoneyFlowBackupPassphrase.ps1'
-   ```
-
-Jei pirmo diegimo metu reikia atkurti šifruotą GitHub kopiją:
-
-```powershell
-$env:MONEY_FLOW_BACKUP_PASSPHRASE = '<atskiru kanalu gauta frazė>'
-.\Deploy-MoneyFlow.ps1 -InitialDatabase '.\db-backups\monthly-money-flow-latest.mfbackup'
-```
-
-Scenarijus kopiją iššifruoja tik laikiname faile ir prieš diegdamas vykdo `PRAGMA integrity_check`. Nešifruota išorinė `.db` taip pat palaikoma, bet turi būti uždaryta ir be `-wal`, `-shm` ar `-journal`. Egzistuojanti gyva DB neperrašoma.
+Pirmo diegimo metu `Deploy-MoneyFlow.bat` automatiškai naudoja repo esančią šifruotą GitHub kopiją. Scenarijus paprašo šifravimo frazės, kopiją iššifruoja tik laikiname faile ir prieš diegdamas vykdo `PRAGMA integrity_check`. Egzistuojanti gyva DB neperrašoma.
 
 ## Atnaujinimas ir rollback
 
-Dar kartą paleiskite `Deploy-MoneyFlow.ps1` be `-InitialDatabase`. Publish arba staging klaida seno serviso nestabdo. Prieš pirmą naujos versijos startą sukuriama `pre-deploy-*` DB kopija. Aktyvavimo ar readiness klaida sustabdo naują versiją, grąžina ankstesnį programos katalogą bei DB ir paleidžia ankstesnę versiją.
+Atnaujinę repo dar kartą paleiskite `Deploy-MoneyFlow.bat`. Esama gyva DB aptinkama automatiškai ir neperrašoma. Publish arba staging klaida seno serviso nestabdo. Prieš pirmą naujos versijos startą sukuriama `pre-deploy-*` DB kopija. Aktyvavimo ar readiness klaida sustabdo naują versiją, grąžina ankstesnį programos katalogą bei DB ir paleidžia ankstesnę versiją.
 
 ## Atsarginė kopija
 
@@ -52,12 +36,14 @@ Skriptas nebesiremia HTTP `/health` ar `/api/maintenance/db-backup`, todėl back
 
 `Restore-MoneyFlowDb.bat`:
 
-1. Prašo administratoriaus teisių.
-2. Iššifruoja `.mfbackup` į laikiną failą.
-3. Prieš keitimą vykdo `PRAGMA integrity_check`.
-4. Sustabdo servisą ir sukuria `pre-restore-*` dabartinės DB kopiją.
-5. Pakeičia DB, paleidžia servisą ir tikrina `/ready`.
-6. Nesėkmės atveju automatiškai grąžina `pre-restore-*` DB ir grąžina klaidos kodą.
+1. Administratoriaus teisių neprašo; operaciją saugo mutacijų API raktas.
+2. Leidžia pasirinkti `.mfbackup` arba vientisą `.db` kopiją.
+3. Nusiunčia kopiją veikiančiam servisui, kuris ją iššifruoja ir vykdo `PRAGMA integrity_check`.
+4. Servisas trumpam nebepriima naujų DB užklausų ir palaukia, kol aktyvios užklausos baigsis.
+5. Per SQLite backup API sukuria `pre-restore-*` rollback kopiją ir atkuria DB nestabdydamas proceso.
+6. Tikrina `/ready`; nesėkmės atveju tame pačiame procese automatiškai grąžina rollback kopiją.
+
+Atkūrimo metu UI gali likti atidarytas. Kelias sekundes DB užklausos gali grąžinti `503 Database maintenance is in progress`; jas galima pakartoti pasibaigus atkūrimui.
 
 ## Backup šifravimo frazė
 

@@ -33,19 +33,19 @@ Get-Process -Id (Get-NetTCPConnection -LocalPort 5000 -State Listen).OwningProce
 ## Importas grąžina 401 arba 503
 
 - 401: PAD `X-Api-Key` nesutampa su serverio raktu.
-- 503: raktas serveryje dar nesukonfigūruotas; paleiskite `Set-MoneyFlowApiKey.ps1`.
+- 503: raktas serveryje dar nesukonfigūruotas; paleiskite `Set-MoneyFlowApiKey.bat`. Atkūrimo metu trumpas 503 taip pat reiškia suplanuotą DB priežiūros langą.
 - 413: JSON viršijo 10 MB ribą; patikrinkite eksportą, o ne aklai didinkite limitą.
 - 400: peržiūrėkite API klaidos tekstą ir JSON schemos versiją / privalomus laukus.
 
 Neloginkite ir nesiųskite viso tikro JSON į viešą issue.
 
-## DB užrakinta arba sugadinta
+## DB atkūrimas
 
-Pirmiausia sustabdykite paslaugą ir pasidarykite bitinę failų kopiją už repo. Nešalinkite `-wal` / `-shm` failų aklai. Atkūrimą atlikite iš patikrintos atsarginės kopijos ir po to paleiskite integracines patikras su nuasmeninta kopija atskiroje aplinkoje.
+Įprastam atkūrimui paleiskite `Restore-MoneyFlowDb.bat`. Administratoriaus teisių nereikia, servisas nestabdomas: API patikrina kopiją, sukuria `pre-restore-*` rollback failą, atkuria SQLite turinį ir patikrina `/ready`.
 
-Automatiniam atkūrimui naudokite `Restore-MoneyFlowDb.ps1`: jis prieš keitimą tikrina `integrity_check`, o po keitimo `/ready`; nesėkmės atveju grąžina ankstesnę DB.
+Jei servisas visai nepasileidžia arba gyva DB tiek sugadinta, kad nepavyksta sukurti rollback kopijos, online atkūrimas sąmoningai nevykdomas. Tokiu avariniu atveju administratorius turi sustabdyti paslaugą ir išsaugoti DB su `-wal` / `-shm` failais prieš rankinį keitimą. Šių failų aklai nešalinkite.
 
-Jei `Backup-MoneyFlowDb.ps1` šifravimo metu rodo `attempt to write a readonly database`, naudojama sena backup eiga arba pasenęs įdiegtas exe. Atnaujinta eiga nebekviečia web aplikacijos šifravimui ir kopiją kuria per `--backup-db`, todėl backup’ui nebereikia mutacijų API rakto.
+Jei `Backup-MoneyFlowDb.bat` šifravimo metu rodo `attempt to write a readonly database`, naudojama sena backup eiga arba pasenęs įdiegtas exe. Atnaujinta eiga nebekviečia web aplikacijos šifravimui ir kopiją kuria per `--backup-db`, todėl backup’ui nebereikia mutacijų API rakto.
 
 ## UI rodo seną versiją
 
