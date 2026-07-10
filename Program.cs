@@ -6,6 +6,38 @@ using PADS.MoneyFlow.Api.Endpoints;
 using PADS.MoneyFlow.Api.Persistence;
 using PADS.MoneyFlow.Api.Services;
 
+// Offline DB backup used by server scripts. It must run before the web host is
+// constructed so a backup operation never starts the app, never runs schema
+// bootstrap code and never writes to the live database.
+var backupDatabaseIndex = Array.FindIndex(
+    args,
+    argument => string.Equals(argument, "--backup-db", StringComparison.OrdinalIgnoreCase));
+if (backupDatabaseIndex >= 0)
+{
+    if (backupDatabaseIndex + 2 >= args.Length)
+    {
+        Console.Error.WriteLine("Usage: PADS.MoneyFlow.Api --backup-db <source-database-path> <backup-database-path>");
+        Environment.ExitCode = 2;
+        return;
+    }
+
+    try
+    {
+        await SqliteDatabaseVerifier.CreateConsistentBackupAsync(
+            args[backupDatabaseIndex + 1],
+            args[backupDatabaseIndex + 2],
+            CancellationToken.None);
+        Console.WriteLine("Database backup created and verified.");
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine($"Database backup failed: {exception.Message}");
+        Environment.ExitCode = 1;
+    }
+
+    return;
+}
+
 var cryptoOperation = args.FirstOrDefault(argument =>
     string.Equals(argument, "--encrypt-db", StringComparison.OrdinalIgnoreCase)
     || string.Equals(argument, "--decrypt-db", StringComparison.OrdinalIgnoreCase));

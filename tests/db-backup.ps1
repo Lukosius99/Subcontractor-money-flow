@@ -3,6 +3,8 @@
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $dbPath = Join-Path $projectRoot "test-data/db-backup.db"
 $backupsDir = Join-Path $projectRoot "test-data/Backups"
+$cliBackupPath = Join-Path $projectRoot "test-data/db-backup-cli.db"
+$secondCliBackupPath = Join-Path $projectRoot "test-data/db-backup-cli-second.db"
 $encryptedPath = Join-Path $projectRoot "test-data/db-backup-test.mfbackup"
 $decryptedPath = Join-Path $projectRoot "test-data/db-backup-decrypted.db"
 $baseUrl = "http://localhost:5097"
@@ -71,7 +73,20 @@ try {
         throw "POST /api/maintenance/db-backup without X-Api-Key should return 401"
     }
 
-    # Backup with the key must produce a consistent SQLite copy next to the DB.
+    $tool = Join-Path $projectRoot "bin/Debug/net10.0/PADS.MoneyFlow.Api.exe"
+    if (-not (Test-Path $tool)) { throw "DB tool was not built at $tool" }
+
+    # The server-side script uses this offline path: no HTTP request and no API
+    # key. It must create a consistent snapshot even while the app is running.
+    & $tool --backup-db $dbPath $cliBackupPath
+    if ($LASTEXITCODE -ne 0) { throw "Offline backup CLI failed" }
+    & $tool --validate-db $cliBackupPath
+    if ($LASTEXITCODE -ne 0) { throw "Offline backup validation failed" }
+
+    & $tool --backup-db $dbPath $secondCliBackupPath
+    if ($LASTEXITCODE -ne 0) { throw "Second offline backup CLI failed" }
+
+    # Backup with the key must still produce a consistent SQLite copy next to the DB.
     $backup = Invoke-RestMethod -Method Post -Uri "$baseUrl/api/maintenance/db-backup" `
         -Headers @{ "X-Api-Key" = $env:MONEY_FLOW_API_KEY }
     if (-not $backup.backedUp -or -not $backup.fileName -or $backup.sizeBytes -le 0) {
@@ -102,16 +117,14 @@ try {
     }
 
     # Encrypted GitHub artifact must round-trip without changing the SQLite file.
-    $tool = Join-Path $projectRoot "bin/Debug/net10.0/PADS.MoneyFlow.Api.exe"
-    if (-not (Test-Path $tool)) { throw "DB tool was not built at $tool" }
     $env:MONEY_FLOW_BACKUP_PASSPHRASE = "integration-test-passphrase-32-chars"
-    & $tool --encrypt-db $backup.fullPath $encryptedPath
+    & $tool --encrypt-db $cliBackupPath $encryptedPath
     if ($LASTEXITCODE -ne 0) { throw "Backup encryption CLI failed" }
     & $tool --decrypt-db $encryptedPath $decryptedPath
     if ($LASTEXITCODE -ne 0) { throw "Backup decryption CLI failed" }
     & $tool --validate-db $decryptedPath
     if ($LASTEXITCODE -ne 0) { throw "Decrypted DB integrity validation failed" }
-    if ((Get-FileHash $backup.fullPath).Hash -ne (Get-FileHash $decryptedPath).Hash) {
+    if ((Get-FileHash $cliBackupPath).Hash -ne (Get-FileHash $decryptedPath).Hash) {
         throw "Encrypted backup round-trip changed the DB contents"
     }
 
@@ -126,5 +139,5 @@ try {
     Remove-Item Env:MONEY_FLOW_BACKUP_PASSPHRASE -ErrorAction SilentlyContinue
     if (Test-Path $dbPath) { Remove-Item -LiteralPath $dbPath -Force -ErrorAction SilentlyContinue }
     if (Test-Path $backupsDir) { Remove-Item -LiteralPath $backupsDir -Recurse -Force -ErrorAction SilentlyContinue }
-    Remove-Item -LiteralPath $encryptedPath, $decryptedPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $cliBackupPath, $secondCliBackupPath, $encryptedPath, $decryptedPath -Force -ErrorAction SilentlyContinue
 }

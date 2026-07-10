@@ -45,7 +45,7 @@ git clone https://github.com/Lukosius99/Subcontractor-money-flow.git
 cd Subcontractor-money-flow
 ```
 
-**2 žingsnis.** (Nebūtina) Nustatykite importo API raktą. Jis reikalingas tik `POST /api/imports/*` užklausoms — be jo programa pasileidžia ir UI veikia, tik importai grąžina 503:
+**2 žingsnis.** (Nebūtina) Nustatykite importo API raktą. Jis reikalingas `POST /api/imports/*` užklausoms ir pagalbiniam HTTP maintenance endpoint’ui — be jo programa pasileidžia ir UI veikia, tik importai / HTTP maintenance grąžina 503. Įprastas `Backup-MoneyFlowDb.bat` API rakto nenaudoja:
 
 ```powershell
 $env:MONEY_FLOW_API_KEY = "dev-only-key-at-least-16-chars"
@@ -134,14 +134,14 @@ Gamyboje diegimo scenarijus naudoja `C:\ProgramData\PADS\MoneyFlow` duomenims ir
 
 ## Importai ir pagrindiniai endpointai
 
-PAD turi siųsti `X-Api-Key` antraštę į abu importo endpointus; ta pati antraštė saugo ir `POST /api/maintenance/*`. Užklausos kūnas ribojamas iki 10 MB.
+PAD turi siųsti `X-Api-Key` antraštę į abu importo endpointus; `POST /api/maintenance/*` taip pat lieka apsaugotas API raktu, bet įprastas `Backup-MoneyFlowDb.bat` jo nebenaudoja. Užklausos kūnas ribojamas iki 10 MB.
 
 | Metodas ir kelias | Paskirtis |
 |---|---|
 | `POST /api/imports/monthly-flow` | Mėnesinio srauto JSON importas |
 | `POST /api/imports/contracts` | Sutarčių ir projektų verčių importas |
 | `GET /api/imports/monthly-flow/status` | Paskutinių importų būsena |
-| `POST /api/maintenance/db-backup` | Vientisa DB kopija (`VACUUM INTO`) į `Backups` katalogą |
+| `POST /api/maintenance/db-backup` | Pagalbinė vientisa DB kopija per SQLite backup API į `Backups` katalogą |
 | `GET /api/projects` | Projektų sąrašas |
 | `GET /api/projects/{code}/monthly-flow` | Projekto / objekto detalė |
 | `GET /api/projects/{code}/ignored-rows` | Rankiniu būdu ignoruotos eilutės |
@@ -155,7 +155,7 @@ Importo validacija, deduplikavimas ir PAD klaidų elgsena aprašyti [docs/import
 ## Duomenų bazė ir atsarginės kopijos
 
 - Gyva DB yra `C:\ProgramData\PADS\MoneyFlow\monthly-money-flow.db` — į repo ji nepatenka ir išgyvena atnaujinimus.
-- **`Backup-MoneyFlowDb.bat`** — per API ir SQLite `VACUUM INTO` sukuria bei patikrina vietinę kopiją, tada prieš Git commit ją AES-256-GCM formatu užšifruoja į `db-backups/monthly-money-flow-latest.mfbackup`. Git/push ar šifravimo klaida grąžina nesėkmės kodą. Jei HTTP neatsako, tiesioginė kopija leidžiama tik patvirtinus, kad servisas sustabdytas, nėra sidecar failų ir DB neužrakinta.
+- **`Backup-MoneyFlowDb.bat`** — be API rakto sukuria ir patikrina vietinę kopiją per offline SQLite backup įrankį, tada prieš Git commit ją AES-256-GCM formatu užšifruoja į `db-backups/monthly-money-flow-latest.mfbackup`. Git/push ar šifravimo klaida grąžina nesėkmės kodą.
 - **`Restore-MoneyFlowDb.bat`** — iššifruoja pasirinktą kopiją, prieš keitimą atlieka `PRAGMA integrity_check`, po keitimo tikrina `/ready`, o nesėkmės atveju automatiškai grąžina `pre-restore-*` DB.
 - Darbiniai `*.db`, `*-wal`, `*-shm` ir `*-journal` failai ignoruojami. Git leidžiamas tik šifruotas `*.mfbackup`.
 - Kitų tikrų įmonės ar SharePoint eksporto duomenų į repo nedėti.

@@ -1,7 +1,10 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
+    # Backwards compatibility only: backup no longer uses the HTTP API.
     [string]$ApiKey,
-    [string]$BaseUrl = 'http://localhost:5000',
+    # Backwards compatibility only: backup no longer uses the HTTP API.
+    [string]$BaseUrl,
+    [string]$DatabasePath,
     [switch]$SkipGitHub,
     [switch]$NoPause
 )
@@ -23,16 +26,69 @@ function Get-PlainText([Security.SecureString]$SecureValue) {
     try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
 }
+function Get-DotnetSdk {
+    $dotnet = Get-Command dotnet.exe -ErrorAction SilentlyContinue
+    if (-not $dotnet) { $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue }
+    if (-not $dotnet) { return $null }
+
+    $sdks = @(& $dotnet.Source --list-sdks 2>$null)
+    if ($LASTEXITCODE -eq 0 -and ($sdks | Where-Object { $_ -match '^10\.' })) {
+        return $dotnet.Source
+    }
+
+    return $null
+}
+function Resolve-DatabaseTool {
+    if ($script:DatabaseToolExecutable) { return $script:DatabaseToolExecutable }
+
+    $projectFile = Join-Path $repoRoot 'PADS.MoneyFlow.Api.csproj'
+    $dotnet = Get-DotnetSdk
+    if ($dotnet -and (Test-Path -LiteralPath $projectFile -PathType Leaf)) {
+        Write-Step 'DB įrankio paruošimas iš repo kodo'
+        $buildOutput = & $dotnet build $projectFile -c Release --nologo 2>&1
+        $buildExitCode = $LASTEXITCODE
+        if ($buildExitCode -ne 0) {
+            $buildOutput | ForEach-Object { Write-Host $_ }
+            Stop-WithError "DB įrankio build nepavyko (dotnet build grąžino $buildExitCode)."
+        }
+
+        $builtExecutable = Join-Path $repoRoot 'bin\Release\net10.0\PADS.MoneyFlow.Api.exe'
+        if (-not (Test-Path -LiteralPath $builtExecutable -PathType Leaf)) {
+            Stop-WithError "Po build nerastas DB įrankis: $builtExecutable"
+        }
+
+        $script:DatabaseToolExecutable = $builtExecutable
+        return $script:DatabaseToolExecutable
+    }
+
+    if (Test-Path -LiteralPath $installedExecutable -PathType Leaf) {
+        $script:DatabaseToolExecutable = $installedExecutable
+        return $script:DatabaseToolExecutable
+    }
+
+    Stop-WithError 'Nerastas .NET 10 SDK ir įdiegtas MoneyFlow exe. Negaliu saugiai sukurti DB kopijos.'
+}
+function Invoke-DatabaseTool([string[]]$ToolArguments) {
+    $tool = Resolve-DatabaseTool
+    & $tool @ToolArguments
+    if ($LASTEXITCODE -ne 0) {
+        Stop-WithError "DB įrankis nepavyko: $tool $($ToolArguments -join ' ')"
+    }
+}
 
 $dataDirectory = Join-Path $env:ProgramData 'PADS\MoneyFlow'
-$liveDatabase = Join-Path $dataDirectory 'monthly-money-flow.db'
-$backupsDirectory = Join-Path $dataDirectory 'Backups'
-$apiKeyFile = Join-Path $dataDirectory 'Configuration\api-key.txt'
+$defaultDatabase = Join-Path $dataDirectory 'monthly-money-flow.db'
+$liveDatabase = if ([string]::IsNullOrWhiteSpace($DatabasePath)) {
+    $defaultDatabase
+} else {
+    [IO.Path]::GetFullPath($DatabasePath)
+}
+$databaseDirectory = Split-Path -Parent $liveDatabase
+$backupsDirectory = Join-Path $databaseDirectory 'Backups'
 $passphraseFile = Join-Path $dataDirectory 'Configuration\backup-passphrase.txt'
 $repoRoot = $PSScriptRoot
 $repoBackupDirectory = Join-Path $repoRoot 'db-backups'
 $keepCount = 30
-$serviceName = 'MoneyFlow'
 $installedExecutable = Join-Path $env:ProgramFiles 'PADS\MoneyFlow\PADS.MoneyFlow.Api.exe'
 $temporaryEncryptedBackup = $null
 
@@ -40,77 +96,29 @@ Write-Host 'MoneyFlow DB atsarginė kopija' -ForegroundColor Green
 Write-Host "Duomenų bazė: $liveDatabase"
 Write-Host "Kopijos:      $backupsDirectory"
 
+if ($PSBoundParameters.ContainsKey('ApiKey') -or $PSBoundParameters.ContainsKey('BaseUrl')) {
+    Write-Host '[INFO] API raktas ir BaseUrl nebenaudojami backup kūrimui; skriptas dirba tiesiogiai su SQLite.' -ForegroundColor Yellow
+}
+
 if (-not (Test-Path -LiteralPath $liveDatabase -PathType Leaf)) {
     Stop-WithError "Nerasta duomenų bazė: $liveDatabase"
 }
 
-$serviceAlive = $false
-try {
-    $health = Invoke-RestMethod -Uri "$BaseUrl/health" -TimeoutSec 3
-    $serviceAlive = $health.status -eq 'ok'
-} catch { }
-
-$backupPath = $null
-if ($serviceAlive) {
-    if ([string]::IsNullOrWhiteSpace($ApiKey)) {
-        $fileKey = $null
-        if (Test-Path -LiteralPath $apiKeyFile -PathType Leaf) {
-            $fileKey = (Get-Content -LiteralPath $apiKeyFile -Raw).Trim()
-        }
-
-        if ($NoPause) {
-            $ApiKey = $fileKey
-        } else {
-            $entered = Read-Host 'Įveskite API raktą (Enter – naudoti serverio Configuration\api-key.txt)'
-            $ApiKey = if ([string]::IsNullOrWhiteSpace($entered)) { $fileKey } else { $entered.Trim() }
-        }
-    }
-    if ([string]::IsNullOrWhiteSpace($ApiKey)) {
-        Stop-WithError 'API raktas nesukonfigūruotas.'
-    }
-
-    Write-Step 'Vientisos kopijos kūrimas per programos API'
-    try {
-        $result = Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/maintenance/db-backup" `
-            -Headers @{ 'X-Api-Key' = $ApiKey } -TimeoutSec 120
-    } catch {
-        $statusCode = 0
-        if ($_.Exception.Response) { $statusCode = [int]$_.Exception.Response.StatusCode }
-        switch ($statusCode) {
-            401 { Stop-WithError 'Neteisingas API raktas.' }
-            503 { Stop-WithError 'API raktas serveryje nesukonfigūruotas.' }
-            default { Stop-WithError "Backup API nepavyko (HTTP $statusCode): $($_.Exception.Message)" }
-        }
-    }
-    $backupPath = $result.fullPath
-    if (-not $result.backedUp -or -not (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
-        Stop-WithError 'Backup API negrąžino egzistuojančios kopijos.'
-    }
-    Write-Host "[GERAI] Sukurta ir patikrinta: $($result.fileName)" -ForegroundColor Green
-} else {
-    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-    if ($service -and $service.Status -ne 'Stopped') {
-        Stop-WithError "Programa HTTP neatsako, bet servisas '$serviceName' yra $($service.Status). Tiesioginė aktyvios DB kopija uždrausta."
-    }
-    foreach ($suffix in @('-wal', '-shm', '-journal')) {
-        if (Test-Path -LiteralPath ($liveDatabase + $suffix)) {
-            Stop-WithError "Šalia neveikiančios DB rastas '$suffix'. Paleiskite servisą ir kurkite kopiją per API."
-        }
-    }
-
-    try {
-        $exclusive = [IO.File]::Open($liveDatabase, 'Open', 'Read', 'None')
-        $exclusive.Dispose()
-    } catch {
-        Stop-WithError 'DB failą naudoja kitas procesas; tiesioginė kopija būtų nesaugi.'
-    }
-
-    Write-Step 'Sustabdytos ir neužrakintos DB kopijavimas'
-    New-Item -ItemType Directory -Path $backupsDirectory -Force | Out-Null
-    $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $backupPath = Join-Path $backupsDirectory "monthly-money-flow-backup-$timestamp.db"
-    Copy-Item -LiteralPath $liveDatabase -Destination $backupPath
+Write-Step 'Vientisos SQLite kopijos kūrimas be API rakto'
+New-Item -ItemType Directory -Path $backupsDirectory -Force | Out-Null
+$timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$backupPath = Join-Path $backupsDirectory "monthly-money-flow-backup-$timestamp.db"
+$attempt = 2
+while (Test-Path -LiteralPath $backupPath) {
+    $backupPath = Join-Path $backupsDirectory "monthly-money-flow-backup-$timestamp-$attempt.db"
+    $attempt++
 }
+
+Invoke-DatabaseTool @('--backup-db', $liveDatabase, $backupPath)
+if (-not (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
+    Stop-WithError 'DB įrankis negrąžino egzistuojančios kopijos.'
+}
+Write-Host "[GERAI] Sukurta ir patikrinta: $(Split-Path -Leaf $backupPath)" -ForegroundColor Green
 
 $oldBackups = @(Get-ChildItem -LiteralPath $backupsDirectory -Filter 'monthly-money-flow-backup-*.db' -File |
     Sort-Object LastWriteTime -Descending | Select-Object -Skip $keepCount)
@@ -120,9 +128,6 @@ foreach ($oldBackup in $oldBackups) {
 
 if (-not $SkipGitHub) {
     Write-Step 'Šifruotos kopijos siuntimas į GitHub'
-    if (-not (Test-Path -LiteralPath $installedExecutable -PathType Leaf)) {
-        Stop-WithError "Nerastas įdiegtos programos DB šifravimo įrankis: $installedExecutable"
-    }
     if (-not (Get-Command git.exe -ErrorAction SilentlyContinue)) {
         Stop-WithError 'Nerastas Git. Naudokite -SkipGitHub tik sąmoningai palikdami kopiją lokaliai.'
     }
@@ -151,8 +156,8 @@ if (-not $SkipGitHub) {
     $previousPassphrase = $env:MONEY_FLOW_BACKUP_PASSPHRASE
     try {
         $env:MONEY_FLOW_BACKUP_PASSPHRASE = $passphrase
-        & $installedExecutable --encrypt-db $backupPath $temporaryEncryptedBackup
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $temporaryEncryptedBackup -PathType Leaf)) {
+        Invoke-DatabaseTool @('--encrypt-db', $backupPath, $temporaryEncryptedBackup)
+        if (-not (Test-Path -LiteralPath $temporaryEncryptedBackup -PathType Leaf)) {
             Stop-WithError 'DB kopijos šifravimas nepavyko.'
         }
     } finally {

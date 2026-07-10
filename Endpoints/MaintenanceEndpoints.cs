@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using PADS.MoneyFlow.Api.Persistence;
 
 namespace PADS.MoneyFlow.Api.Endpoints;
@@ -10,11 +9,10 @@ internal static class MaintenanceEndpoints
     public static void MapMaintenanceEndpoints(this WebApplication app, string databasePath)
     {
         // Creates a transactionally consistent snapshot of the live database via
-        // SQLite VACUUM INTO, so callers never need to stop the service (or hold
+        // SQLite's backup API, so callers never need to stop the service (or hold
         // administrator rights) to take a safe backup. Gated by the same API key
         // as the import endpoints (see Program.cs).
         app.MapPost("/api/maintenance/db-backup", async (
-            IDbContextFactory<MoneyFlowDbContext> dbFactory,
             ILogger<Program> logger,
             CancellationToken cancellationToken) =>
         {
@@ -33,23 +31,10 @@ internal static class MaintenanceEndpoints
                     backupPath = Path.Combine(backupsDirectory, $"{baseName}-{attempt}.db");
                 }
 
-                await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-                var connection = db.Database.GetDbConnection();
-                await connection.OpenAsync(cancellationToken);
-                // VACUUM cannot run inside a transaction, so the command is issued
-                // on a raw connection instead of ExecuteSqlRawAsync.
-                await using (var command = connection.CreateCommand())
-                {
-                    command.CommandText = "VACUUM INTO $backupPath";
-                    var parameter = command.CreateParameter();
-                    parameter.ParameterName = "$backupPath";
-                    parameter.Value = backupPath;
-                    command.Parameters.Add(parameter);
-                    await command.ExecuteNonQueryAsync(cancellationToken);
-                }
-
-                // Do not report or distribute a copy that cannot be restored.
-                await SqliteDatabaseVerifier.VerifyIntegrityAsync(backupPath, cancellationToken);
+                await SqliteDatabaseVerifier.CreateConsistentBackupAsync(
+                    databasePath,
+                    backupPath,
+                    cancellationToken);
 
                 var prunedCount = 0;
                 var oldBackups = new DirectoryInfo(backupsDirectory)

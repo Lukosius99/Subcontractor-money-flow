@@ -41,12 +41,12 @@ Dar kartą paleiskite `Deploy-MoneyFlow.ps1` be `-InitialDatabase`. Publish arba
 
 `Backup-MoneyFlowDb.bat` veikiančiai paslaugai nereikalauja administratoriaus teisių:
 
-1. `POST /api/maintenance/db-backup` sukuria `VACUUM INTO` kopiją.
-2. API iškart vykdo kopijos `integrity_check`.
+1. Offline DB įrankis sukuria vientisą SQLite kopiją tiesiai iš `C:\ProgramData\PADS\MoneyFlow\monthly-money-flow.db`; API raktas nereikalingas.
+2. Kopija iškart patikrinama per `integrity_check`.
 3. Operatorius AES-256-GCM formatu užšifruoja kopiją į `monthly-money-flow-latest.mfbackup`.
 4. Vykdomas `git pull --ff-only`, commit ir push. Šifravimo ar Git klaida grąžina nesėkmės kodą.
 
-Jei HTTP neatsako, aktyvios DB kopijuoti neleidžiama. Tiesioginė kopija galima tik kai servisas patvirtintai sustabdytas, nėra SQLite sidecar failų ir DB galima atidaryti išskirtinai.
+Skriptas nebesiremia HTTP `/health` ar `/api/maintenance/db-backup`, todėl backup procesui nereikia nei veikiančio web endpoint’o, nei importų API rakto. HTTP maintenance endpoint’as paliktas kaip apsaugotas pagalbinis kelias rankiniams/diagnostiniams atvejams.
 
 ## Atkūrimas
 
