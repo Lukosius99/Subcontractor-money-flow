@@ -1,154 +1,169 @@
-<h1 align="center">PADS · Subrangos pinigų srautai</h1>
+<h1 align="center">PADS · diegimo instrukcija</h1>
 
-<p align="center">
-  Vidinė Windows LAN programa projektų, objektų ir subrangovų pinigų srautams peržiūrėti.
-</p>
-
-<p align="center">
-  <a href="https://github.com/Lukosius99/Subcontractor-money-flow/actions/workflows/ci.yml"><img alt="CI būsena" src="https://github.com/Lukosius99/Subcontractor-money-flow/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-  <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white">
-  <img alt="Windows LAN" src="https://img.shields.io/badge/Windows-LAN-0078D4?logo=windows&logoColor=white">
-  <img alt="SQLite" src="https://img.shields.io/badge/DB-SQLite-0F80CC?logo=sqlite&logoColor=white">
-</p>
+<p align="center">MoneyFlow diegimas naujame Windows serveryje su dabartine GitHub duomenų baze.</p>
 
 > [!IMPORTANT]
-> Programa skirta tik vidiniam tinklui. Visi LAN naudotojai gali skaityti duomenis. Rankiniam redagavimui naudojama redagavimo slaptafrazė, o PAD importams ir DB priežiūrai – atskiras API raktas. Programos nejunkite tiesiai prie interneto.
+> Programa skirta tik vidiniam įmonės tinklui. Neatidarykite jos į internetą.
 
-## Prieš perduodant administratoriui
+## 1. Pasiruoškite reikalingas reikšmes
 
-Sename serveryje dukart spustelėkite **`Backup-MoneyFlowDb.bat`**. Sėkmingai pasibaigusi komanda užšifruotą naujausią DB kopiją įkelia į privatų GitHub repo.
+Prieš pradėdami turėkite:
 
-Administratoriui atskiru saugiu kanalu perduokite:
+- prieigą prie privataus GitHub repo;
+- dabartinės GitHub DB kopijos šifravimo frazę;
+- naują bent 16 simbolių API raktą;
+- naują bent 16 simbolių redagavimo slaptafrazę;
+- naują bent 20 simbolių backup šifravimo frazę;
+- serveriui skirtą vidinį IP adresą ir, jei naudojamas, DNS vardą, pvz. `pads.lt`.
 
-- prieigą prie privataus repo;
-- dabartinės GitHub DB kopijos šifravimo frazę.
+API raktas, redagavimo slaptafrazė ir backup frazė turi būti skirtingi.
 
-API raktas, redagavimo slaptafrazė ir nauja backup frazė production serveryje turi būti nustatyti iš naujo ir tarpusavyje nesutapti.
+## 2. Paruoškite Windows serverį
 
-## Diegimas naujame kompiuteryje
+1. Prisijunkite prie serverio paskyra, turinčia vietinio administratoriaus teises.
+2. Įdiekite [Git for Windows](https://git-scm.com/download/win). Diegimo lange galite palikti numatytuosius pasirinkimus.
+3. Įdiekite [.NET 10 SDK x64](https://dotnet.microsoft.com/download/dotnet/10.0).
+4. Patikrinkite serverio tinklo profilį:
+   - atidarykite **Settings → Network & internet → Ethernet**;
+   - serveris turi būti įmonės `Domain` tinkle arba administratoriaus patvirtintame `Private` tinkle;
+   - `Public` profilyje programos LAN ugniasienės taisyklė neveiks.
+5. Atidarykite **Windows Terminal** arba **PowerShell** ir paeiliui įveskite:
 
-### 1. Paruoškite serverį
+```powershell
+git --version
+dotnet --version
+```
 
-Įdiekite [Git for Windows](https://git-scm.com/download/win) ir [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). Patikrinkite, kad serverio Git paskyra gali klonuoti ir pushinti į privatų repo.
+Abi komandos turi parodyti įdiegtas versijas.
 
-### 2. Klonuokite projektą
+## 3. Atsisiųskite projektą
+
+1. File Explorer sukurkite katalogą `C:\PADS` ir jį atidarykite.
+2. Paspauskite File Explorer adreso juostą, įrašykite `powershell` ir paspauskite **Enter**.
+3. Atsidariusiame lange įveskite:
 
 ```powershell
 git clone https://github.com/Lukosius99/Subcontractor-money-flow.git
-cd Subcontractor-money-flow
+cd .\Subcontractor-money-flow
+git config user.name "PADS Production"
+git config user.email "pads@jusu-imone.lt"
 ```
 
-### 3. Įdiekite programą
-
-Repo kataloge pasirinkite vieną failą:
-
-| Norimas adresas | Paleidžiamas failas |
-|---|---|
-| `http://<IP>:5000` arba `http://<vidinis-vardas>:5000` | **`Deploy-MoneyFlow.bat`** |
-| `http://<vidinis-vardas>` per tame pačiame serveryje veikiantį reverse proxy | **`Deploy-MoneyFlow-ReverseProxy.bat`** |
-
-Patvirtinkite Windows administratoriaus užklausą ir, jei prašoma, įveskite dabartinės GitHub DB kopijos šifravimo frazę.
-
-Paleidiklis pats parenka naujausią GitHub DB kopiją. Diegimo scenarijus publikuoja programą, sukuria Windows servisą, paruošia ugniasienę ir patikrina `/health` bei `/ready`.
-
-### 4. Nustatykite raktus
-
-Atidarykite `C:\Program Files\PADS\MoneyFlow` ir paleiskite:
-
-1. **`Set-MoneyFlowApiKey.bat`**
-2. **`Set-MoneyFlowEditPassphrase.bat`**
-3. **`Set-MoneyFlowBackupPassphrase.bat`**
-
-Power Automate Desktop turi siųsti API raktą `X-Api-Key` antraštėje. Redagavimo slaptafrazė skirta tik rankiniams pakeitimams Web UI ir neturi būti perduodama PAD.
-
-Nustačius naują backup frazę, vieną kartą paleiskite repo kataloge **`Backup-MoneyFlowDb.bat`**, kad GitHub kopija būtų peršifruota nauja production fraze.
-
-### 5. Patikrinkite
-
-- `http://localhost:5000/health` turi grąžinti `ok`.
-- `http://localhost:5000/ready` turi grąžinti `ready`.
-- `DirectLan` režime `http://<serverio-IP>:5000` turi atsidaryti kitame LAN kompiuteryje.
-- `ReverseProxy` režime turi atsidaryti vidinis vardas be `:5000`, o tiesioginis LAN prisijungimas prie 5000 turi būti nepasiekiamas.
-- Skaitymas turi veikti be rakto, o įjungus redagavimą turi būti paprašyta redagavimo slaptafrazės.
-
-Serverio tinklo profilis turi būti `Domain` arba administratoriaus patvirtintas `Private`. `Public` profilyje MoneyFlow ugniasienės taisyklė sąmoningai neveikia.
-
-### Vidinis DNS ir HTTP
-
-- Vidiniame DNS sukurkite A įrašą, pvz. `pads.lt → <serverio-IP>`. Naudokite tik įmonės valdomą vidinę DNS zoną.
-- DNS pats nepanaikina `:5000`. Adresui `http://pads.lt` reikia IIS, Caddy arba Nginx, kuris TCP 80 perduoda į `http://127.0.0.1:5000`.
-- Naudojant reverse proxy, paleiskite `Deploy-MoneyFlow-ReverseProxy.bat`; aplikacijos 5000 prievadas tada nebus atvertas LAN.
-- HTTP leidžiamas tik patikimame vidiniame VLAN. Nekurkite internetinio NAT ar port-forward į 80/5000.
-
-## Atnaujinimas
-
-Atnaujinkite repo (`git pull` arba GitHub Desktop), tada vėl dukart spustelėkite **`Deploy-MoneyFlow.bat`**. Pirmo diegimo metu pasirinktas tinklo režimas išsaugomas ir per atnaujinimą nesikeičia.
-
-Gyva DB saugoma `C:\ProgramData\PADS\MoneyFlow` ir atnaujinant neperrašoma. Nesėkmingo diegimo atveju scenarijus grąžina ankstesnę programos ir DB būseną.
-
-## Kurį failą paleisti
-
-| Veiksmas | Paleidžiamas failas | Administratoriaus teisės |
-|---|---|---|
-| Įdiegti arba atnaujinti | `Deploy-MoneyFlow.bat` | Taip, Windows paprašys automatiškai |
-| Įdiegti už reverse proxy | `Deploy-MoneyFlow-ReverseProxy.bat` | Taip, Windows paprašys automatiškai |
-| Sukurti ir įkelti DB kopiją | `Backup-MoneyFlowDb.bat` | Ne |
-| Atkurti DB | `Restore-MoneyFlowDb.bat` | Ne |
-| Pakeisti API raktą | `Set-MoneyFlowApiKey.bat` | Ne |
-| Pakeisti redagavimo slaptafrazę | `Set-MoneyFlowEditPassphrase.bat` | Ne |
-| Pakeisti backup frazę | `Set-MoneyFlowBackupPassphrase.bat` | Ne |
-
-`Deploy`, `Backup` ir `Restore` failus paleiskite klonuotame repo kataloge. Tris `Set-...` failus paleiskite iš `C:\Program Files\PADS\MoneyFlow`.
-
-Kuriant backup servisas nestabdomas; operaciją saugo API raktas. Atkuriant DB servisas taip pat nestabdomas: jis patikrina kopiją, sukuria rollback failą ir pakeičia SQLite turinį; kelioms sekundėms naujos DB užklausos gali gauti `503`.
-
-## Prieigos modelis
-
-| Veiksmas | Prieiga |
-|---|---|
-| Atidaryti UI ir skaityti duomenis | Visi vidinio LAN naudotojai |
-| Rankiniu būdu redaguoti ar trinti Web UI | Reikia redagavimo slaptafrazės |
-| Importuoti per PAD arba vykdyti DB priežiūrą | Reikia `X-Api-Key` |
-| Pasiekti iš interneto | Draudžiama |
-
-## Duomenų kelias
+4. Jei atsidaro GitHub prisijungimo langas, prisijunkite paskyra, turinčia šio repo skaitymo ir rašymo teises.
+5. Vietoje `pads@jusu-imone.lt` galite įrašyti administratoriaus arba serveriui skirtą Git el. paštą.
+6. Uždarykite PowerShell langą ir File Explorer atidarykite:
 
 ```text
-SharePoint / verslo sistemos → Power Automate → PAD → lokali API → SQLite → Web UI
+C:\PADS\Subcontractor-money-flow
 ```
 
-<details>
-<summary><strong>Atverti interaktyvų duomenų žemėlapį</strong></summary>
+## 4. Paleiskite diegimą
 
-Žemėlapį lokaliai atidarykite iš [docs/subrangos-duomenu-kelias-3d/index.html](docs/subrangos-duomenu-kelias-3d/index.html). Techninės detalės pagal nutylėjimą paslėptos.
+Pasirinkite tik vieną diegimo variantą:
 
-</details>
-
-## Kūrėjui
-
-```powershell
-$env:MONEY_FLOW_API_KEY = "dev-only-key-at-least-16-chars"
-$env:MONEY_FLOW_EDIT_PASSPHRASE = "dev-only-edit-passphrase"
-dotnet run
-```
-
-Visos patikros:
-
-```powershell
-.\Run-Tests.ps1
-```
-
-## Dokumentacija
-
-| Dokumentas | Kada jo reikia |
+| Galutinis programos adresas | Dukart spustelėkite |
 |---|---|
-| [Diegimas ir DB atkūrimas](docs/deployment.md) | Serverio diegimui, backup ir rollback |
-| [Importo eiga](docs/import-flow.md) | PAD, JSON ir importo klaidoms |
-| [Architektūra](docs/architecture.md) | Sistemos ir repo struktūrai suprasti |
-| [Techninis žinynas](docs/reference.md) | Konfigūracijai, API ir testams |
-| [Trikčių šalinimas](docs/troubleshooting.md) | Kai servisas ar importas neveikia |
-| [Saugumas](SECURITY.md) | LAN, rakto ir incidentų taisyklėms |
+| `http://<serverio-IP>:5000` | `Deploy-MoneyFlow.bat` |
+| `http://pads.lt` per IIS, Caddy arba Nginx | `Deploy-MoneyFlow-ReverseProxy.bat` |
 
----
+Tada:
 
-<p align="center"><sub>Vidinis projektas · neskirtas viešam naudojimui</sub></p>
+1. Windows administratoriaus užklausoje paspauskite **Yes**.
+2. Jei rodoma Windows apsauga, paspauskite **More info → Run anyway**.
+3. Kai prašoma **backup šifravimo frazės**, įveskite dabartinės GitHub DB kopijos frazę ir paspauskite **Enter**. Vedami simboliai ekrane nebus rodomi.
+4. Palaukite, kol atsiras žalias pranešimas **DIEGIMAS BAIGTAS SĖKMINGAI**.
+5. Paspauskite **Enter**, kad uždarytumėte langą.
+
+Diegimo failas pats paima `db-backups\monthly-money-flow-latest.mfbackup`, atkuria DB, įdiegia Windows servisą ir patikrina programos veikimą.
+
+## 5. Nustatykite prieigos reikšmes
+
+1. File Explorer adreso juostoje įveskite:
+
+```text
+C:\Program Files\PADS\MoneyFlow
+```
+
+2. Dukart spustelėkite **`Set-MoneyFlowApiKey.bat`**.
+3. Įveskite naują bent 16 simbolių API raktą ir paspauskite **Enter**. Simboliai nebus rodomi.
+4. Uždarykite langą, kai matote **[GERAI]**.
+5. Dukart spustelėkite **`Set-MoneyFlowEditPassphrase.bat`**.
+6. Įveskite naują bent 16 simbolių redagavimo slaptafrazę ir paspauskite **Enter**.
+7. Uždarykite langą, kai matote **[GERAI]**.
+8. Dukart spustelėkite **`Set-MoneyFlowBackupPassphrase.bat`**.
+9. Įveskite naują bent 20 simbolių backup šifravimo frazę ir paspauskite **Enter**.
+10. Uždarykite langą, kai matote **[GERAI]**.
+
+Naudojimas:
+
+- API raktą įrašykite į PAD / Power Automate `X-Api-Key` antraštę;
+- redagavimo slaptafrazę įveda Web UI naudotojas paspaudęs **Redaguoti**;
+- backup frazę saugokite slaptažodžių saugykloje.
+
+## 6. Sukurkite pirmą production backup
+
+1. Grįžkite į `C:\PADS\Subcontractor-money-flow`.
+2. Dukart spustelėkite **`Backup-MoneyFlowDb.bat`**.
+3. Jei prašoma, įveskite 5 žingsnyje nustatytą API raktą arba backup frazę ir paspauskite **Enter**.
+4. Palaukite pranešimo **[GERAI] Šifruota kopija išsiųsta į GitHub**.
+5. Paspauskite **Enter**, kad uždarytumėte langą.
+
+Šis veiksmas peršifruoja dabartinę DB nauja production backup fraze ir įkelia ją į GitHub.
+
+## 7. Priskirkite vidinį adresą
+
+### Jei pasirinkote `Deploy-MoneyFlow.bat`
+
+1. Priskirkite serveriui pastovų vidinį IP adresą.
+2. Kitame vidinio tinklo kompiuteryje atidarykite:
+
+```text
+http://<serverio-IP>:5000
+```
+
+Jei sukuriate DNS A įrašą `pads.lt → <serverio-IP>`, adresas bus `http://pads.lt:5000`.
+
+### Jei pasirinkote `Deploy-MoneyFlow-ReverseProxy.bat`
+
+1. Vidiniame DNS sukurkite A įrašą:
+
+```text
+pads.lt → <serverio-IP>
+```
+
+2. Tame pačiame serveryje sukonfigūruokite IIS, Caddy arba Nginx:
+
+```text
+Klausomas adresas: http://pads.lt:80
+Perduoti į:       http://127.0.0.1:5000
+```
+
+3. Windows ugniasienėje leiskite TCP 80 tik iš įmonės vidinių tinklų.
+4. Neatidarykite TCP 5000 į LAN ir nekurkite internetinio NAT ar port-forward.
+5. Kitame vidinio tinklo kompiuteryje atidarykite:
+
+```text
+http://pads.lt
+```
+
+## 8. Patikrinkite diegimą
+
+Serveryje naršyklėje atidarykite:
+
+```text
+http://localhost:5000/health
+http://localhost:5000/ready
+```
+
+Pirmas adresas turi parodyti `ok`, antras – `ready`.
+
+Tada kitame vidinio tinklo kompiuteryje patikrinkite:
+
+1. Atsidaro pasirinktas programos adresas.
+2. Matomi dabartinės DB projektai ir duomenys.
+3. Duomenis galima skaityti neįvedus rakto.
+4. Projekte paspaudus **Redaguoti** prašoma redagavimo slaptafrazės.
+5. Įvedus teisingą redagavimo slaptafrazę galima atlikti rankinį pakeitimą.
+6. PAD importo užklausa su `X-Api-Key` priimama.
+
+Diegimas baigtas, kai visi šeši patikrinimai sėkmingi.
