@@ -169,6 +169,7 @@ builder.Services.AddDbContextFactory<MoneyFlowDbContext>(options =>
 builder.Services.AddSingleton<MonthlyFlowStore>();
 builder.Services.AddSingleton<MonthlyFlowImportService>();
 builder.Services.AddSingleton<ApiKeyProvider>();
+builder.Services.AddSingleton<EditPassphraseProvider>();
 builder.Services.AddSingleton<BackupPassphraseProvider>();
 builder.Services.AddSingleton<DatabaseMaintenanceGate>();
 
@@ -178,8 +179,15 @@ var apiKeyProvider = app.Services.GetRequiredService<ApiKeyProvider>();
 if (string.IsNullOrWhiteSpace(apiKeyProvider.GetApiKey()))
 {
     app.Logger.LogWarning(
-        "MoneyFlow API key is not configured. State-changing API endpoints will reject requests until " +
+        "MoneyFlow API key is not configured. Import and maintenance mutations will reject requests until " +
         "Set-MoneyFlowApiKey.ps1 is run.");
+}
+var editPassphraseProvider = app.Services.GetRequiredService<EditPassphraseProvider>();
+if (!editPassphraseProvider.IsConfigured())
+{
+    app.Logger.LogWarning(
+        "MoneyFlow edit passphrase is not configured. Manual UI edits will be rejected until " +
+        "Set-MoneyFlowEditPassphrase.bat is run.");
 }
 
 await app.Services.GetRequiredService<MonthlyFlowStore>()
@@ -215,18 +223,37 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 // Everyone on the trusted internal network may use the read-only UI and GET/HEAD
-// API endpoints without signing in. Every state-changing API request is gated by
-// the API key, including browser-driven corrections. This default-deny rule also
-// protects future POST/PUT/PATCH/DELETE endpoints automatically.
+// API endpoints without signing in. Browser-driven corrections use a dedicated
+// edit passphrase; automated imports and maintenance operations keep using the
+// API key. Unknown future mutations default to the API key boundary.
 app.Use(async (context, next) =>
 {
     var isReadOnlyMethod = HttpMethods.IsGet(context.Request.Method)
         || HttpMethods.IsHead(context.Request.Method)
         || HttpMethods.IsOptions(context.Request.Method);
-    var requiresApiKey = context.Request.Path.StartsWithSegments("/api")
+    var isApiMutation = context.Request.Path.StartsWithSegments("/api")
         && !isReadOnlyMethod;
+    var requiresEditPassphrase = isApiMutation
+        && ManualEditEndpoints.RequiresEditPassphrase(context.Request.Path);
 
-    if (requiresApiKey)
+    if (requiresEditPassphrase)
+    {
+        if (!editPassphraseProvider.IsConfigured())
+        {
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            await context.Response.WriteAsJsonAsync(new { error = "Edit passphrase is not configured." });
+            return;
+        }
+
+        var provided = context.Request.Headers["X-Edit-Passphrase"].FirstOrDefault();
+        if (!editPassphraseProvider.Verify(provided))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(new { error = "Missing or invalid edit passphrase." });
+            return;
+        }
+    }
+    else if (isApiMutation)
     {
         var apiKey = apiKeyProvider.GetApiKey();
         if (string.IsNullOrWhiteSpace(apiKey))

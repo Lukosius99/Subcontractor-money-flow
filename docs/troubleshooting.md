@@ -37,6 +37,11 @@ Get-Process -Id (Get-NetTCPConnection -LocalPort 5000 -State Listen).OwningProce
 - 413: JSON viršijo 10 MB ribą; patikrinkite eksportą, o ne aklai didinkite limitą.
 - 400: peržiūrėkite API klaidos tekstą ir JSON schemos versiją / privalomus laukus.
 
+## Redagavimas grąžina 401 arba 503
+
+- 401: įvesta redagavimo slaptafrazė nesutampa su serveryje nustatyta reikšme. API raktas čia netinka.
+- 503: redagavimo slaptafrazė dar nenustatyta; serveryje paleiskite `Set-MoneyFlowEditPassphrase.bat`. Serviso perkrauti nereikia.
+
 Neloginkite ir nesiųskite viso tikro JSON į viešą issue.
 
 ## DB atkūrimas
@@ -45,7 +50,7 @@ Neloginkite ir nesiųskite viso tikro JSON į viešą issue.
 
 Jei servisas visai nepasileidžia arba gyva DB tiek sugadinta, kad nepavyksta sukurti rollback kopijos, online atkūrimas sąmoningai nevykdomas. Tokiu avariniu atveju administratorius turi sustabdyti paslaugą ir išsaugoti DB su `-wal` / `-shm` failais prieš rankinį keitimą. Šių failų aklai nešalinkite.
 
-Jei `Backup-MoneyFlowDb.bat` šifravimo metu rodo `attempt to write a readonly database`, naudojama sena backup eiga arba pasenęs įdiegtas exe. Atnaujinta eiga nebekviečia web aplikacijos šifravimui ir kopiją kuria per `--backup-db`, todėl backup’ui nebereikia mutacijų API rakto.
+Jei `Backup-MoneyFlowDb.bat` grąžina 401, patikrinkite `C:\ProgramData\PADS\MoneyFlow\Configuration\api-key.txt` ir serverio API raktą. Jei rodoma `unable to open database file`, naudojama sena tiesioginio DB skaitymo backup eiga — atnaujinkite repo ir dar kartą paleiskite `Deploy-MoneyFlow.bat`. Dabartinė eiga kopiją kuria per serviso `/api/maintenance/db-backup` endpointą.
 
 ## UI rodo seną versiją
 

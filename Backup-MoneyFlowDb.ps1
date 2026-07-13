@@ -1,10 +1,7 @@
 ﻿[CmdletBinding()]
 param(
-    # Backwards compatibility only: backup no longer uses the HTTP API.
     [string]$ApiKey,
-    # Backwards compatibility only: backup no longer uses the HTTP API.
-    [string]$BaseUrl,
-    [string]$DatabasePath,
+    [string]$BaseUrl = 'http://localhost:5000',
     [switch]$SkipGitHub,
     [switch]$NoPause
 )
@@ -25,6 +22,40 @@ function Get-PlainText([Security.SecureString]$SecureValue) {
     $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureValue)
     try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
+}
+function Invoke-ServerBackup(
+    [string]$Uri,
+    [string]$ApiKey
+) {
+    try {
+        return Invoke-RestMethod -Method Post -Uri $Uri `
+            -Headers @{ 'X-Api-Key' = $ApiKey } -TimeoutSec 300
+    }
+    catch {
+        $requestError = $_
+        $statusCode = $null
+        $serverMessage = $null
+        if ($requestError.Exception.Response) {
+            try { $statusCode = [int]$requestError.Exception.Response.StatusCode } catch { }
+            try {
+                $stream = $requestError.Exception.Response.GetResponseStream()
+                if ($stream) {
+                    $reader = New-Object IO.StreamReader($stream)
+                    try {
+                        $body = $reader.ReadToEnd()
+                        $serverMessage = try { ($body | ConvertFrom-Json).error } catch { $body }
+                    }
+                    finally { $reader.Dispose() }
+                }
+            }
+            catch { }
+        }
+        if ($statusCode) {
+            if (-not $serverMessage) { $serverMessage = $requestError.Exception.Message }
+            throw "Serveris grąžino HTTP ${statusCode}: $serverMessage"
+        }
+        throw $requestError
+    }
 }
 function Get-DotnetSdk {
     $dotnet = Get-Command dotnet.exe -ErrorAction SilentlyContinue
@@ -77,54 +108,45 @@ function Invoke-DatabaseTool([string[]]$ToolArguments) {
 }
 
 $dataDirectory = Join-Path $env:ProgramData 'PADS\MoneyFlow'
-$defaultDatabase = Join-Path $dataDirectory 'monthly-money-flow.db'
-$liveDatabase = if ([string]::IsNullOrWhiteSpace($DatabasePath)) {
-    $defaultDatabase
-} else {
-    [IO.Path]::GetFullPath($DatabasePath)
-}
-$databaseDirectory = Split-Path -Parent $liveDatabase
-$backupsDirectory = Join-Path $databaseDirectory 'Backups'
+$apiKeyFile = Join-Path $dataDirectory 'Configuration\api-key.txt'
 $passphraseFile = Join-Path $dataDirectory 'Configuration\backup-passphrase.txt'
 $repoRoot = $PSScriptRoot
 $repoBackupDirectory = Join-Path $repoRoot 'db-backups'
-$keepCount = 30
 $installedExecutable = Join-Path $env:ProgramFiles 'PADS\MoneyFlow\PADS.MoneyFlow.Api.exe'
 $temporaryEncryptedBackup = $null
+$apiKey = $null
+$backupPath = $null
+$backupUrl = $BaseUrl.TrimEnd('/') + '/api/maintenance/db-backup'
 
 Write-Host 'MoneyFlow DB atsarginė kopija' -ForegroundColor Green
-Write-Host "Duomenų bazė: $liveDatabase"
-Write-Host "Kopijos:      $backupsDirectory"
+Write-Host "Servisas: $BaseUrl"
 
-if ($PSBoundParameters.ContainsKey('ApiKey') -or $PSBoundParameters.ContainsKey('BaseUrl')) {
-    Write-Host '[INFO] API raktas ir BaseUrl nebenaudojami backup kūrimui; skriptas dirba tiesiogiai su SQLite.' -ForegroundColor Yellow
+$apiKey = if (-not [string]::IsNullOrWhiteSpace($ApiKey)) {
+    $ApiKey
+} elseif (-not [string]::IsNullOrWhiteSpace($env:MONEY_FLOW_API_KEY)) {
+    $env:MONEY_FLOW_API_KEY
+} elseif (Test-Path -LiteralPath $apiKeyFile -PathType Leaf) {
+    (Get-Content -LiteralPath $apiKeyFile -Raw).Trim()
+} elseif (-not $NoPause) {
+    Get-PlainText (Read-Host 'Įveskite MoneyFlow API raktą' -AsSecureString)
+}
+if ([string]::IsNullOrWhiteSpace($apiKey) -or $apiKey.Length -lt 16) {
+    Stop-WithError 'MoneyFlow API raktas nesukonfigūruotas arba trumpesnis nei 16 simbolių.'
 }
 
-if (-not (Test-Path -LiteralPath $liveDatabase -PathType Leaf)) {
-    Stop-WithError "Nerasta duomenų bazė: $liveDatabase"
+Write-Step 'Vientisos SQLite kopijos kūrimas per veikiantį servisą'
+$backupResult = Invoke-ServerBackup -Uri $backupUrl -ApiKey $apiKey
+$apiKey = $null
+if (-not $backupResult.backedUp -or -not $backupResult.fullPath -or $backupResult.sizeBytes -le 0) {
+    Stop-WithError "Serveris grąžino netikėtą backup atsakymą: $($backupResult | ConvertTo-Json -Compress)"
 }
-
-Write-Step 'Vientisos SQLite kopijos kūrimas be API rakto'
-New-Item -ItemType Directory -Path $backupsDirectory -Force | Out-Null
-$timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$backupPath = Join-Path $backupsDirectory "monthly-money-flow-backup-$timestamp.db"
-$attempt = 2
-while (Test-Path -LiteralPath $backupPath) {
-    $backupPath = Join-Path $backupsDirectory "monthly-money-flow-backup-$timestamp-$attempt.db"
-    $attempt++
+$backupPath = [IO.Path]::GetFullPath([string]$backupResult.fullPath)
+if ([IO.Path]::GetExtension($backupPath) -ne '.db' `
+    -or -not (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
+    Stop-WithError 'Serverio sukurta DB kopija nerasta arba turi netinkamą plėtinį.'
 }
-
-Invoke-DatabaseTool @('--backup-db', $liveDatabase, $backupPath)
-if (-not (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
-    Stop-WithError 'DB įrankis negrąžino egzistuojančios kopijos.'
-}
+Invoke-DatabaseTool @('--validate-db', $backupPath)
 Write-Host "[GERAI] Sukurta ir patikrinta: $(Split-Path -Leaf $backupPath)" -ForegroundColor Green
-
-$oldBackups = @(Get-ChildItem -LiteralPath $backupsDirectory -Filter 'monthly-money-flow-backup-*.db' -File |
-    Sort-Object LastWriteTime -Descending | Select-Object -Skip $keepCount)
-foreach ($oldBackup in $oldBackups) {
-    Remove-Item -LiteralPath $oldBackup.FullName -Force -ErrorAction SilentlyContinue
-}
 
 if (-not $SkipGitHub) {
     Write-Step 'Šifruotos kopijos siuntimas į GitHub'

@@ -135,6 +135,11 @@ try {
         throw "Project detail page did not load expected HTML."
     }
 
+    $projectScript = Invoke-WebRequest -Uri "$baseUrl/project.js" -UseBasicParsing
+    if ($projectScript.Content -notmatch "X-Edit-Passphrase" -or $projectScript.Content -notmatch "/api/access/edit/verify") {
+        throw "Project editor is not wired to the edit-passphrase boundary."
+    }
+
     $monthlyFlow = Invoke-RestMethod "$baseUrl/api/projects/$expectedParentProjectCode/monthly-flow?objectNumber=$expectedProjectCode"
     if ($monthlyFlow.groups.Count -lt 1 -or $null -eq $monthlyFlow.totals) {
         throw "Monthly flow endpoint returned no groups."

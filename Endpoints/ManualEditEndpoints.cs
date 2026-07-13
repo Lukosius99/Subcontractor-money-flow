@@ -5,6 +5,33 @@ namespace PADS.MoneyFlow.Api.Endpoints;
 
 internal static class ManualEditEndpoints
 {
+    public static bool RequiresEditPassphrase(PathString path)
+    {
+        if (string.Equals(
+            path.Value,
+            "/api/access/edit/verify",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var segments = path.Value?
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (segments is null
+            || segments.Length < 4
+            || !string.Equals(segments[0], "api", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(segments[1], "projects", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return segments.Any(segment =>
+            string.Equals(segment, "contract-links", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(segment, "object-assignments", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(segment, "exclude", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(segment, "restore", StringComparison.OrdinalIgnoreCase));
+    }
+
     public static void MapManualEditEndpoints(this WebApplication app)
     {
         app.MapGet("/api/projects/{projectCode}/ignored-rows", async (

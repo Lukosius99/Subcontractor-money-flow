@@ -85,7 +85,7 @@ let drawerTab = "monthly";
 let firstContractRender = true;
 let firstKpiRender = true;
 let ignoredDrawerOpen = false;
-let mutationApiKey = "";
+let editPassphrase = "";
 let excelJsLoadPromise = null;
 
 const linkBanner = document.createElement("div");
@@ -123,7 +123,7 @@ subSearchClear?.addEventListener("click", () => {
 toggleMonthsButton?.addEventListener("click", () => setShowMonths(!showMonths));
 
 toggleEditButton?.addEventListener("click", async () => {
-  if (!editMode && !(await ensureMutationApiKey())) return;
+  if (!editMode && !(await ensureEditPassphrase())) return;
   setEditMode(!editMode);
 });
 
@@ -310,13 +310,13 @@ function openModal({ title, subject, transfer, message, note, confirmLabel, canc
       const field = document.createElement("label");
       field.className = "modal-field";
       const label = document.createElement("span");
-      label.textContent = "API raktas";
+      label.textContent = "Redagavimo slaptafrazė";
       passwordEl = document.createElement("input");
       passwordEl.type = "password";
       passwordEl.autocomplete = "off";
       passwordEl.spellcheck = false;
       passwordEl.maxLength = 512;
-      passwordEl.placeholder = "Įveskite X-Api-Key reikšmę";
+      passwordEl.placeholder = "Įveskite redagavimo slaptafrazę";
       field.append(label, passwordEl);
       modal.append(field);
     }
@@ -328,7 +328,7 @@ function openModal({ title, subject, transfer, message, note, confirmLabel, canc
         ? {
             confirmed: true,
             reason: reasonEl?.value.trim() || "",
-            apiKey: passwordEl?.value.trim() || ""
+            editPassphrase: passwordEl?.value.trim() || ""
           }
         : result;
       if (activeModalCleanup) activeModalCleanup();
@@ -389,45 +389,45 @@ function alertDialog(title, message) {
   return openModal({ title, message, confirmLabel: "Gerai", confirmOnly: true, tone: "danger" });
 }
 
-async function ensureMutationApiKey() {
-  if (mutationApiKey) return mutationApiKey;
+async function ensureEditPassphrase() {
+  if (editPassphrase) return editPassphrase;
 
   const result = await openModal({
     title: "Redagavimo prieiga",
-    message: "Duomenis keičiantiems veiksmams reikia administratoriaus suteikto API rakto.",
-    note: "Raktas laikomas tik šio puslapio atmintyje ir išvalomas puslapį uždarius arba atnaujinus.",
+    message: "Rankiniams pakeitimams įveskite redagavimo slaptafrazę.",
+    note: "Slaptafrazė laikoma tik šio puslapio atmintyje ir išvaloma puslapį uždarius arba atnaujinus.",
     confirmLabel: "Atrakinti",
     passwordInput: true
   });
-  const candidate = result?.confirmed ? result.apiKey : "";
+  const candidate = result?.confirmed ? result.editPassphrase : "";
   if (!candidate) return "";
 
-  const response = await fetch("/api/access/verify", {
+  const response = await fetch("/api/access/edit/verify", {
     method: "POST",
-    headers: { "X-Api-Key": candidate }
+    headers: { "X-Edit-Passphrase": candidate }
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     await alertDialog(
       "Prieiga nesuteikta",
-      payload.error || `API raktas nepriimtas (${response.status}).`
+      payload.error || `Slaptafrazė nepriimta (${response.status}).`
     );
     return "";
   }
 
-  mutationApiKey = candidate;
-  return mutationApiKey;
+  editPassphrase = candidate;
+  return editPassphrase;
 }
 
 async function mutationFetch(input, init = {}) {
-  const apiKey = await ensureMutationApiKey();
-  if (!apiKey) return null;
+  const passphrase = await ensureEditPassphrase();
+  if (!passphrase) return null;
 
   const headers = new Headers(init.headers || {});
-  headers.set("X-Api-Key", apiKey);
+  headers.set("X-Edit-Passphrase", passphrase);
   const response = await fetch(input, { ...init, headers });
   if (response.status === 401 || response.status === 503) {
-    mutationApiKey = "";
+    editPassphrase = "";
     setEditMode(false);
   }
   return response;

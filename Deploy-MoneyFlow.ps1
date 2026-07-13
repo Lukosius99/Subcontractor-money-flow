@@ -1,6 +1,8 @@
 ﻿[CmdletBinding()]
 param(
-    [string]$InitialDatabase
+    [string]$InitialDatabase,
+    [ValidateSet('DirectLan', 'ReverseProxy')]
+    [string]$NetworkMode
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,6 +38,7 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 if (-not $isAdmin) {
     $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
     if ($InitialDatabase) { $arguments += @('-InitialDatabase', "`"$InitialDatabase`"") }
+    if ($PSBoundParameters.ContainsKey('NetworkMode')) { $arguments += @('-NetworkMode', $NetworkMode) }
     Write-Host 'Prašoma administratoriaus teisių...' -ForegroundColor Yellow
     Start-Process powershell.exe -Verb RunAs -ArgumentList $arguments
     exit
@@ -52,6 +55,7 @@ $dataDirectory = Join-Path $env:ProgramData 'PADS\MoneyFlow'
 $liveDatabase = Join-Path $dataDirectory 'monthly-money-flow.db'
 $backupsDirectory = Join-Path $dataDirectory 'Backups'
 $configurationDirectory = Join-Path $dataDirectory 'Configuration'
+$networkModeFile = Join-Path $configurationDirectory 'deployment-network-mode.txt'
 $passphraseFile = Join-Path $configurationDirectory 'backup-passphrase.txt'
 $serviceName = 'MoneyFlow'
 $serviceAccount = "NT SERVICE\$serviceName"
@@ -104,6 +108,8 @@ try {
         'Set-MoneyFlowApiKey.bat',
         'Set-MoneyFlowBackupPassphrase.ps1',
         'Set-MoneyFlowBackupPassphrase.bat',
+        'Set-MoneyFlowEditPassphrase.ps1',
+        'Set-MoneyFlowEditPassphrase.bat',
         'wwwroot\index.html')) {
         if (-not (Test-Path -LiteralPath (Join-Path $stagingDirectory $requiredFile))) {
             Stop-WithError "Publish rezultate nerastas: $requiredFile"
@@ -186,6 +192,22 @@ try {
         Copy-Item -LiteralPath $databaseToInstall -Destination $liveDatabase
     }
 
+    $effectiveNetworkMode = $NetworkMode
+    if (-not $effectiveNetworkMode -and (Test-Path -LiteralPath $networkModeFile -PathType Leaf)) {
+        $savedNetworkMode = (Get-Content -LiteralPath $networkModeFile -Raw).Trim()
+        if ($savedNetworkMode -in @('DirectLan', 'ReverseProxy')) {
+            $effectiveNetworkMode = $savedNetworkMode
+        } else {
+            Stop-WithError "Neatpažintas išsaugotas tinklo režimas: $savedNetworkMode"
+        }
+    }
+    if (-not $effectiveNetworkMode) { $effectiveNetworkMode = 'DirectLan' }
+    $listenUrl = if ($effectiveNetworkMode -eq 'ReverseProxy') {
+        'http://127.0.0.1:5000'
+    } else {
+        'http://0.0.0.0:5000'
+    }
+
     Write-Step 'Windows paslaugos konfigūravimas'
     if (-not $existingService) {
         New-Service -Name $serviceName -BinaryPathName "`"$executable`"" -DisplayName 'MoneyFlow' `
@@ -199,7 +221,7 @@ try {
     }
     New-ItemProperty -LiteralPath $serviceRegistryKey -Name Environment -PropertyType MultiString -Force -Value @(
         'ASPNETCORE_ENVIRONMENT=Production',
-        'ASPNETCORE_URLS=http://0.0.0.0:5000'
+        "Kestrel__Endpoints__Http__Url=$listenUrl"
     ) | Out-Null
     if (-not [Diagnostics.EventLog]::SourceExists('MoneyFlow')) {
         New-EventLog -LogName Application -Source 'MoneyFlow'
@@ -239,8 +261,12 @@ try {
 
     Write-Step 'Ugniasienės taisyklės konfigūravimas'
     Get-NetFirewallRule -DisplayName $firewallRuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-    New-NetFirewallRule -DisplayName $firewallRuleName -Direction Inbound -Action Allow -Protocol TCP `
-        -LocalPort 5000 -Profile Domain,Private | Out-Null
+    if ($effectiveNetworkMode -eq 'DirectLan') {
+        New-NetFirewallRule -DisplayName $firewallRuleName -Direction Inbound -Action Allow -Protocol TCP `
+            -LocalPort 5000 -Profile Domain,Private | Out-Null
+    } else {
+        Write-Host 'ReverseProxy režimas: TCP 5000 iš LAN neatidaromas.' -ForegroundColor Yellow
+    }
 
     Write-Step 'Naujos versijos paleidimas ir readiness patikra'
     Start-Service $serviceName
@@ -257,13 +283,18 @@ try {
 
     Remove-Item -LiteralPath $previousDirectory -Recurse -Force -ErrorAction SilentlyContinue
     $oldInstallMoved = $false
+    [IO.File]::WriteAllText($networkModeFile, $effectiveNetworkMode, [Text.UTF8Encoding]::new($false))
     Write-Host "`nDIEGIMAS BAIGTAS SĖKMINGAI" -ForegroundColor Green
-    Write-Host '  http://localhost:5000'
+    Write-Host "  Tinklo režimas: $effectiveNetworkMode"
+    Write-Host '  Patikra: http://localhost:5000'
     if (-not (Test-Path (Join-Path $configurationDirectory 'api-key.txt'))) {
         Write-Host 'KITAS ŽINGSNIS: paleiskite Set-MoneyFlowApiKey.bat.' -ForegroundColor Yellow
     }
     if (-not (Test-Path $passphraseFile)) {
         Write-Host 'KITAS ŽINGSNIS: paleiskite Set-MoneyFlowBackupPassphrase.bat.' -ForegroundColor Yellow
+    }
+    if (-not (Test-Path (Join-Path $configurationDirectory 'edit-passphrase.txt'))) {
+        Write-Host 'KITAS ŽINGSNIS: paleiskite Set-MoneyFlowEditPassphrase.bat.' -ForegroundColor Yellow
     }
 } catch {
     $deploymentError = $_.Exception.Message

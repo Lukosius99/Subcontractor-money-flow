@@ -50,7 +50,11 @@ $monthlyMayJson = @{
 $env:ASPNETCORE_ENVIRONMENT = "Development"
 $env:MONEY_FLOW_DB_PATH = $dbPath
 $env:MONEY_FLOW_API_KEY = "test-api-key"
-$PSDefaultParameterValues["Invoke-RestMethod:Headers"] = @{ "X-Api-Key" = $env:MONEY_FLOW_API_KEY }
+$env:MONEY_FLOW_EDIT_PASSPHRASE = "test-edit-passphrase-for-manual-links"
+$PSDefaultParameterValues["Invoke-RestMethod:Headers"] = @{
+    "X-Api-Key" = $env:MONEY_FLOW_API_KEY
+    "X-Edit-Passphrase" = $env:MONEY_FLOW_EDIT_PASSPHRASE
+}
 $server = Start-Process -FilePath "dotnet" -ArgumentList "run --urls $baseUrl" -WorkingDirectory $projectRoot -PassThru -WindowStyle Hidden
 
 function Invoke-JsonPost($uri, $json) {
@@ -202,7 +206,7 @@ try {
 
     # Removing the link restores the unmatched row but keeps the direct match.
     $delete = Invoke-WebRequest -Method Delete -Uri "$baseUrl/api/projects/P1578/contract-links/$($link.id)" `
-        -Headers @{ "X-Api-Key" = $env:MONEY_FLOW_API_KEY } -UseBasicParsing
+        -Headers @{ "X-Edit-Passphrase" = $env:MONEY_FLOW_EDIT_PASSPHRASE } -UseBasicParsing
     if ($delete.StatusCode -ne 204) {
         throw "Link delete should return 204, got $($delete.StatusCode)."
     }
@@ -224,7 +228,7 @@ try {
     $notFound = $false
     try {
         Invoke-WebRequest -Method Delete -Uri "$baseUrl/api/projects/P1578/contract-links/00000000-0000-0000-0000-000000000000" `
-            -Headers @{ "X-Api-Key" = $env:MONEY_FLOW_API_KEY } -UseBasicParsing | Out-Null
+            -Headers @{ "X-Edit-Passphrase" = $env:MONEY_FLOW_EDIT_PASSPHRASE } -UseBasicParsing | Out-Null
     } catch {
         $notFound = $true
     }
@@ -238,4 +242,5 @@ finally {
     if ($server -and -not $server.HasExited) {
         Stop-Process -Id $server.Id -Force
     }
+    Remove-Item Env:MONEY_FLOW_EDIT_PASSPHRASE -ErrorAction SilentlyContinue
 }

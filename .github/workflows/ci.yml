@@ -57,6 +57,8 @@ jobs:
             'Set-MoneyFlowApiKey.bat',
             'Set-MoneyFlowBackupPassphrase.ps1',
             'Set-MoneyFlowBackupPassphrase.bat',
+            'Set-MoneyFlowEditPassphrase.ps1',
+            'Set-MoneyFlowEditPassphrase.bat',
             'wwwroot\index.html'
           )) {
             if (-not (Test-Path (Join-Path $output $required))) { throw "Missing publish content: $required" }

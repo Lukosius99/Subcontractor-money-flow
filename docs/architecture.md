@@ -27,10 +27,11 @@ Programoje nėra atskiro frontend serverio, eilės ar išorinės DB. Tai sąmoni
 ## Duomenų ir pasitikėjimo ribos
 
 - Skaitymo `GET/HEAD` API neturi naudotojo autentifikacijos; pasitikima LAN / reverse proxy riba.
-- Kiekviena `/api` mutacija (`POST`, `PUT`, `PATCH`, `DELETE`), įskaitant importus ir rankinį redagavimą, reikalauja bendro API rakto.
+- PAD importai, DB atkūrimas ir kitos automatizavimo mutacijos reikalauja `X-Api-Key`.
+- Rankinio projekto redagavimo mutacijos reikalauja atskiros `X-Edit-Passphrase`; Web UI ją laiko tik atverto puslapio atmintyje.
 - Užklausos kūnas ribojamas iki 10 MB.
 - Gamybos diagnostikos endpointas nepublikuojamas.
-- SQLite ir API rakto failai laikomi `ProgramData`, ne programos ar repo kataloge.
+- SQLite, API rakto ir redagavimo slaptafrazės hash failai laikomi `ProgramData`, ne programos ar repo kataloge.
 
 ## Schema ir atnaujinimai
 

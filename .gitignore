@@ -47,6 +47,8 @@ test-data/*store*.json
 !.env.example
 api-key.txt
 backup-passphrase.txt
+edit-passphrase.txt
+deployment-network-mode.txt
 appsettings.Development.json
 appsettings.Local.json
 appsettings.*.local.json

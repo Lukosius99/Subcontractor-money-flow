@@ -4,6 +4,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $dbPath = Join-Path $projectRoot "test-data/ignored-monthly-rows.db"
 $baseUrl = "http://localhost:5096"
 $apiKey = "test-api-key"
+$editPassphrase = "test-edit-passphrase-for-ignored-rows"
 
 function New-ImportJson([decimal]$firstAmount) {
     @{
@@ -31,6 +32,7 @@ function Start-TestServer {
     $env:ASPNETCORE_ENVIRONMENT = "Development"
     $env:MONEY_FLOW_DB_PATH = $dbPath
     $env:MONEY_FLOW_API_KEY = $apiKey
+    $env:MONEY_FLOW_EDIT_PASSPHRASE = $editPassphrase
     $process = Start-Process -FilePath "dotnet" -ArgumentList "run --urls $baseUrl" -WorkingDirectory $projectRoot -PassThru -WindowStyle Hidden
     Wait-Ready
     return $process
@@ -38,18 +40,19 @@ function Start-TestServer {
 
 if (Test-Path $dbPath) { Remove-Item -LiteralPath $dbPath -Force }
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dbPath) | Out-Null
-$headers = @{ "X-Api-Key" = $apiKey }
+$apiHeaders = @{ "X-Api-Key" = $apiKey }
+$editHeaders = @{ "X-Edit-Passphrase" = $editPassphrase }
 $server = $null
 
 try {
     $server = Start-TestServer
-    Invoke-RestMethod -Method Post -Uri "$baseUrl/api/imports/monthly-flow?sourceFileName=ignored-test-1.json" -Headers $headers -ContentType "application/json" -Body (New-ImportJson 100) | Out-Null
+    Invoke-RestMethod -Method Post -Uri "$baseUrl/api/imports/monthly-flow?sourceFileName=ignored-test-1.json" -Headers $apiHeaders -ContentType "application/json" -Body (New-ImportJson 100) | Out-Null
     $before = Invoke-RestMethod "$baseUrl/api/projects/PIGNORE/monthly-flow?objectNumber=PIGNORE-01"
     $liveRows = @($before.groups | ForEach-Object rows | ForEach-Object { $_ })
     if ($liveRows.Count -ne 2 -or [decimal]$before.totals.amountWithoutVat -ne 300) { throw "Initial live rows or total were incorrect." }
     $row = $liveRows | Where-Object subcontractorName -eq "Ignore Me UAB"
 
-    Invoke-RestMethod -Method Post -Uri "$baseUrl/api/projects/PIGNORE/monthly-flow/$($row.id)/exclude?objectNumber=PIGNORE-01" -Headers $headers -ContentType "application/json" -Body '{"reason":"Duplicate source row"}' | Out-Null
+    Invoke-RestMethod -Method Post -Uri "$baseUrl/api/projects/PIGNORE/monthly-flow/$($row.id)/exclude?objectNumber=PIGNORE-01" -Headers $editHeaders -ContentType "application/json" -Body '{"reason":"Duplicate source row"}' | Out-Null
     $excluded = Invoke-RestMethod "$baseUrl/api/projects/PIGNORE/monthly-flow?objectNumber=PIGNORE-01"
     $excludedLiveRows = @($excluded.groups | ForEach-Object rows | ForEach-Object { $_ })
     if ($excludedLiveRows.id -contains $row.id -or [decimal]$excluded.totals.amountWithoutVat -ne 200 -or $excluded.ignoredRowCount -ne 1) { throw "Ignored row remained live or still affected totals." }
@@ -58,7 +61,7 @@ try {
     if (@($ignored.rows).Count -ne 1 -or $ignored.rows[0].id -ne $row.id -or $ignored.rows[0].excludedReason -ne "Duplicate source row") { throw "Ignored rows API did not return exclusion metadata." }
 
     # A later import may update source values, but must not erase the manual exclusion.
-    Invoke-RestMethod -Method Post -Uri "$baseUrl/api/imports/monthly-flow?sourceFileName=ignored-test-2.json" -Headers $headers -ContentType "application/json" -Body (New-ImportJson 150) | Out-Null
+    Invoke-RestMethod -Method Post -Uri "$baseUrl/api/imports/monthly-flow?sourceFileName=ignored-test-2.json" -Headers $apiHeaders -ContentType "application/json" -Body (New-ImportJson 150) | Out-Null
     $afterReimport = Invoke-RestMethod "$baseUrl/api/projects/PIGNORE/monthly-flow?objectNumber=PIGNORE-01"
     if ([decimal]$afterReimport.totals.amountWithoutVat -ne 200 -or $afterReimport.ignoredRowCount -ne 1) { throw "Re-import erased the ignored state." }
 
@@ -69,7 +72,7 @@ try {
     $afterRestart = Invoke-RestMethod "$baseUrl/api/projects/PIGNORE/ignored-rows?objectNumber=PIGNORE-01"
     if (@($afterRestart.rows).Count -ne 1 -or [decimal]$afterRestart.rows[0].amountWithoutVat -ne 150) { throw "Ignored row did not persist in SQLite across restart." }
 
-    Invoke-RestMethod -Method Post -Uri "$baseUrl/api/projects/PIGNORE/monthly-flow/$($row.id)/restore?objectNumber=PIGNORE-01" -Headers $headers | Out-Null
+    Invoke-RestMethod -Method Post -Uri "$baseUrl/api/projects/PIGNORE/monthly-flow/$($row.id)/restore?objectNumber=PIGNORE-01" -Headers $editHeaders | Out-Null
     $restored = Invoke-RestMethod "$baseUrl/api/projects/PIGNORE/monthly-flow?objectNumber=PIGNORE-01"
     $restoredRows = @($restored.groups | ForEach-Object rows | ForEach-Object { $_ })
     if ($restoredRows.id -notcontains $row.id -or [decimal]$restored.totals.amountWithoutVat -ne 350 -or $restored.ignoredRowCount -ne 0) { throw "Restore did not return the row to live totals." }
@@ -80,4 +83,5 @@ try {
 }
 finally {
     if ($server -and -not $server.HasExited) { Stop-Process -Id $server.Id -Force }
+    Remove-Item Env:MONEY_FLOW_EDIT_PASSPHRASE -ErrorAction SilentlyContinue
 }

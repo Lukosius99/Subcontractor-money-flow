@@ -35,9 +35,14 @@ internal static class SystemEndpoints
         });
 
         // The API-key middleware runs before endpoints, so a successful response
-        // proves that a browser operator supplied the configured mutation key.
+        // proves that the caller supplied the configured automation/maintenance key.
         // No data is read or changed by this verification request.
         app.MapPost("/api/access/verify", () => Results.NoContent());
+
+        // The edit-passphrase middleware authenticates this request. It lets the
+        // browser unlock manual corrections without exposing or reusing the PAD
+        // and maintenance API key.
+        app.MapPost("/api/access/edit/verify", () => Results.NoContent());
 
         if (!app.Environment.IsProduction())
         {

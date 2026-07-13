@@ -32,7 +32,7 @@ $contractJson = @{
 
 $env:ASPNETCORE_ENVIRONMENT = "Development"
 $env:MONEY_FLOW_DB_PATH = $dbPath
-$env:MONEY_FLOW_API_KEY = "test-api-key"
+$env:MONEY_FLOW_API_KEY = "test-api-key-for-backup"
 $server = Start-Process -FilePath "dotnet" -ArgumentList "run --urls $baseUrl" -WorkingDirectory $projectRoot -PassThru -WindowStyle Hidden
 
 try {
@@ -76,8 +76,7 @@ try {
     $tool = Join-Path $projectRoot "bin/Debug/net10.0/PADS.MoneyFlow.Api.exe"
     if (-not (Test-Path $tool)) { throw "DB tool was not built at $tool" }
 
-    # The server-side script uses this offline path: no HTTP request and no API
-    # key. It must create a consistent snapshot even while the app is running.
+    # Keep offline CLI coverage for deploy-time and low-level database tooling.
     & $tool --backup-db $dbPath $cliBackupPath
     if ($LASTEXITCODE -ne 0) { throw "Offline backup CLI failed" }
     & $tool --validate-db $cliBackupPath
@@ -114,6 +113,24 @@ try {
         -Headers @{ "X-Api-Key" = $env:MONEY_FLOW_API_KEY }
     if ($secondBackup.fileName -eq $backup.fileName) {
         throw "Second backup reused the same file name: $($secondBackup.fileName)"
+    }
+
+    # The operator launcher must use the authenticated service boundary rather
+    # than requiring direct read access to the production SQLite file.
+    $backupScript = Join-Path $projectRoot "Backup-MoneyFlowDb.ps1"
+    $backupScriptText = Get-Content -LiteralPath $backupScript -Raw
+    $directLivePattern = [regex]::Escape("Invoke-DatabaseTool @('--backup-db', `$liveDatabase")
+    if ($backupScriptText -notmatch '/api/maintenance/db-backup' `
+        -or $backupScriptText -match $directLivePattern) {
+        throw "Operator backup script is not using the protected service endpoint."
+    }
+    $backupCountBefore = @(Get-ChildItem -LiteralPath $backupsDir -Filter '*.db' -File).Count
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $backupScript `
+        -ApiKey $env:MONEY_FLOW_API_KEY -BaseUrl $baseUrl -SkipGitHub -NoPause
+    if ($LASTEXITCODE -ne 0) { throw "Operator backup script failed with exit code $LASTEXITCODE" }
+    $backupCountAfter = @(Get-ChildItem -LiteralPath $backupsDir -Filter '*.db' -File).Count
+    if ($backupCountAfter -le $backupCountBefore) {
+        throw "Operator backup script did not create a server-owned DB copy."
     }
 
     # Encrypted GitHub artifact must round-trip without changing the SQLite file.

@@ -42,6 +42,16 @@ try {
         throw "Normal configuration overrode MONEY_FLOW_DB_PATH in Production."
     }
 
+    $deployScript = Get-Content -LiteralPath (Join-Path $projectRoot "Deploy-MoneyFlow.ps1") -Raw
+    $reverseProxyLauncher = Join-Path $projectRoot "Deploy-MoneyFlow-ReverseProxy.bat"
+    if ($deployScript -notmatch "ValidateSet\('DirectLan', 'ReverseProxy'\)" `
+        -or $deployScript -notmatch "http://127\.0\.0\.1:5000" `
+        -or $deployScript -notmatch "deployment-network-mode\.txt" `
+        -or $deployScript -notmatch 'Kestrel__Endpoints__Http__Url=\$listenUrl' `
+        -or -not (Test-Path -LiteralPath $reverseProxyLauncher -PathType Leaf)) {
+        throw "Persistent DirectLan/ReverseProxy deployment modes are incomplete."
+    }
+
     "Production database-path precedence check passed."
 }
 finally {
